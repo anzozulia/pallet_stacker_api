@@ -1,0 +1,39 @@
+# Project metadata + the PLANNED dependency stack for the API service.
+# No application code exists yet (Phase 0 = scaffolding). Dependencies are the
+# intended stack from docs/03_design_decisions.md; pin exact versions in Phase 1
+# once the solver adapter is built and the core dependency (D10) is resolved.
+
+[build-system]
+requires = ["setuptools>=68", "wheel>=0.40"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pallet-packer-api-service"
+version = "0.1.0"
+description = "Async HTTP microservice wrapping the pallet_packer BRKGA algorithm"
+requires-python = ">=3.12"
+# Planned runtime stack (see docs/03_design_decisions.md D8). Versions to be
+# pinned in Phase 1.
+dependencies = [
+    # "fastapi",          # async HTTP API
+    # "uvicorn[standard]",# ASGI server
+    # "arq",              # Redis-backed async job queue + workers
+    # "redis",            # client
+    # "pydantic",         # request/response schemas + validation
+    # "pallet-packer",    # the core algorithm (D10: dependency mechanism TBD)
+]
+
+[project.optional-dependencies]
+dev = [
+    # "pytest",
+    # "httpx",            # async test client
+    # "ruff",             # lint/format
+    # "mypy",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
