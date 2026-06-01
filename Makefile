@@ -4,7 +4,7 @@
 # for a host that already has the core importable (PYTHONPATH=/path/to/core +
 # libgomp). See docs/04_roadmap.md.
 
-.PHONY: help install dev lint test run worker up down smoke
+.PHONY: help install dev lint test run worker up down smoke loadtest
 
 help:  ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -33,3 +33,8 @@ down:  ## docker compose down
 
 smoke:  ## Run the end-to-end smoke test against a running stack
 	bash scripts/smoke_e2e.sh
+
+loadtest:  ## Phase 6 load test: scaled stack + a burst (see docs/05_load_profile.md)
+	LT_OMP=2 docker compose -f docker-compose.loadtest.yml up -d --build --scale worker=4
+	python3 scripts/loadtest.py burst --jobs 24 --boxes 60 --budget 90 --label 4wx2t
+	docker compose -f docker-compose.loadtest.yml down

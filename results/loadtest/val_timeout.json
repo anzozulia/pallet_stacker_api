@@ -1,0 +1,39 @@
+{
+ "mode": "curve",
+ "budget_s": 90.0,
+ "records": [
+  {
+   "job_id": "599c817aff4246e1a08f94a03ac01a46",
+   "status": "timeout",
+   "t_submit": 1780318299.80417,
+   "t_first_running": 1780318300.331606,
+   "t_done": 1780318310.485985,
+   "queue_wait_s": 0.5274360179901123,
+   "solve_s": 10.15437912940979,
+   "e2e_s": 10.681815147399902,
+   "items_packed": null,
+   "items_unpacked": null,
+   "pallets_used": null,
+   "error": {
+    "code": "solve_timeout",
+    "message": "Exceeded the 10s wall-clock limit."
+   },
+   "n_boxes": 500
+  },
+  {
+   "job_id": "f65c47a8bfda4b0a98024d9e19072840",
+   "status": "done",
+   "t_submit": 1780318310.486331,
+   "t_first_running": 1780318310.999192,
+   "t_done": 1780318316.06605,
+   "queue_wait_s": 0.5128610134124756,
+   "solve_s": 5.0668580532073975,
+   "e2e_s": 5.579719066619873,
+   "items_packed": 20,
+   "items_unpacked": 0,
+   "pallets_used": 1,
+   "error": null,
+   "n_boxes": 20
+  }
+ ]
+}

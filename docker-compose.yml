@@ -35,4 +35,8 @@ services:
       - "..:/core:ro"
     depends_on: [redis]
     deploy:
-      replicas: 2            # 2 workers = 2 concurrent solves (D4)
+      # 4 workers x OMP=2 = 4 concurrent solves on 8 of ~10 cores (D4). This is the
+      # Phase 6 load-test recommendation (docs/05_load_profile.md): OMP=2, workers
+      # ~= cores/2, ~2 cores headroom for api+redis. Reduce on smaller hosts so
+      # total worker-threads stay <= cores.
+      replicas: 4

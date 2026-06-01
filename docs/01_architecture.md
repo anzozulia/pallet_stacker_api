@@ -82,6 +82,11 @@ several users at once rather than make one job finish marginally faster. Below
 ~2 threads the parallel benefit mostly vanishes, so 2–4 threads/worker is the
 sweet spot. This is tunable per deployment without code changes.
 
+> **Measured (Phase 6, `05_load_profile.md`).** The table above is borne out
+> empirically on a 10-core box: throughput rises monotonically with worker count,
+> OMP=1 is a false economy (slow solves + big-job budget risk), and **`OMP=2` with
+> workers ≈ cores⁄2** is the pick. Shipped default: **4 workers × OMP=2**.
+
 - **API tier** scales independently (it does no heavy work).
 - **Worker tier** scales to match demand; capacity = number of workers.
 - **Redis** is a single logical instance for the MVP (HA/cluster is a later

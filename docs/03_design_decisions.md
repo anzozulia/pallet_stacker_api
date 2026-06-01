@@ -28,20 +28,28 @@ Redis is the shared queue + job-status + result store (with TTL) from the start.
 horizontally scalable; retrofitting it later would mean rearchitecting. *Rejected:*
 in-process queue (no horizontal scaling, state lost on restart).
 
-### D4 — Multi-worker horizontal scaling — **ACCEPTED**
+### D4 — Multi-worker horizontal scaling — **ACCEPTED (tuned in Phase 6)**
 Capacity = number of workers; each worker runs one solve at a time, so N workers ⇒
 N concurrent solves from different users. *Why:* the natural unit of work is "one
 solve," and OpenMP already parallelises a single solve across cores; scaling out
 processes gives clean multi-user concurrency. See `01_architecture.md` §3 for the
 `workers × threads-per-worker` dial.
+*Tuned (Phase 6 load test, `docs/05_load_profile.md`):* **`OMP_NUM_THREADS = 2`,
+workers ≈ cores⁄2**, leaving ~2 cores for api+redis+OS when co-located. Measured on
+a 10-core VM: throughput rises monotonically with worker count; OMP=1 is a false
+economy (kills parallel decode, risks the big-job budget); above 2 threads/worker
+trades concurrency for marginal speed. **Shipped default: 4 workers × OMP=2**
+(`docker-compose.yml`). Don't let total worker-threads exceed cores.
 
-### D5 — Input cap: 500 boxes — **ACCEPTED**
+### D5 — Input cap: 500 boxes — **ACCEPTED (confirmed in Phase 6)**
 Hard-reject requests with more than 500 boxes. *Why:* the core's measured feasible
 ceiling within a ~90 s budget is ~500 (it goes super-linear and overruns the
-budget beyond that). Doubles as abuse protection. *Note:* a slightly lower cap
-(e.g. 400) buys safety margin for worst-case loads; the exact number is a config
-value (`MAX_BOXES`) — see D9. *Rejected:* the originally-discussed 5000 (the core
-does not complete at that size).
+budget beyond that). Doubles as abuse protection. *Confirmed (Phase 6):* a 500-box
+solve takes ~28 s uncontended (OMP=4) and ~42–50 s with **4 concurrent 500-box
+solves** at OMP=2 — comfortably inside the 90 s budget, **0 timeouts**. So 500 is
+safe; no need to drop to 400. The exact number stays a config value (`MAX_BOXES`,
+D9). *Rejected:* the originally-discussed 5000 (the core does not complete at that
+size).
 
 ### D6 — Time budget > 60 s, with a HARD worker-side timeout — **ACCEPTED**
 The per-solve budget is "much bigger than 60 s" (target ~90–120 s). The solver's
@@ -49,8 +57,11 @@ own `time_limit_s` is **soft** (checked between BRKGA generations), so the worke
 wraps each solve in a **hard wall-clock kill** set a bit above the soft budget.
 *Why:* a single pathological input must never pin a worker indefinitely; a service
 SLA needs a real ceiling. *This is the one item the core deliberately deferred to
-the service layer.* *Rejected:* relying on the solver's soft budget alone (it can
-overrun 100–300 % at scale).
+the service layer.* *Confirmed (Phase 6):* **soft 90 / hard 120** keeps ample
+margin (worst case observed ~50 s); a forced `HARD=10` killed a 500-box solve at
+10.15 s → `timeout`, and the next job ran `done` — the worker survives the kill.
+*Rejected:* relying on the solver's soft budget alone (it can overrun 100–300 % at
+scale).
 
 ### D7 — Integer-only spatial input contract — **ACCEPTED**
 Box and pallet **dimensions** (and overhang) must be positive integers; weights
@@ -118,16 +129,18 @@ all forwarded clients share one bucket. *Rejected for MVP:* API keys / quotas
 
 ## Decisions still open
 
-Most build-time decisions are now settled (D10 resolved → core mounted at `/core`
-in dev, pinned `pip install` in prod; the v1 constraint surface is weight,
-fragility, support, group, `max_pallets`, overhang, with CoG at defaults). What
-remains is the operational tuning that **Phase 6 (load test) produces**, plus one
-optional feature:
+The operational tuning is now settled by the **Phase 6 load test**
+(`docs/05_load_profile.md`): `MAX_BOXES = 500` (validated within budget under
+contention), budgets **soft 90 / hard 120**, and **`OMP_NUM_THREADS = 2` with
+workers ≈ cores⁄2** (shipped default 4 × 2). D10 is resolved (core mounted at
+`/core` in dev, pinned `pip install` in prod); the v1 constraint surface is weight,
+fragility, support, group, `max_pallets`, overhang, with CoG at defaults.
 
-| Open item | Resolved by | Current value (default in use) |
+What remains are optional / follow-up items only:
+
+| Open item | Resolution | Status |
 |---|---|---|
-| Final `MAX_BOXES` (400 vs 500) | Phase 6 load test | 500 |
-| Final `SOFT`/`HARD` budgets | Phase 6 load test | soft 90 s / hard 120 s |
-| `OMP_NUM_THREADS` × worker count | Phase 6 load test | 2 threads × 2 workers (compose default) |
 | Result caching by input-hash (D11) | optional, post-MVP | not implemented |
 | `X-Forwarded-For` / `trust_proxy` for rate limiting (D13) | follow-up hardening | uses `request.client` only |
+| Queue-saturation `503` (shed load at max queue depth) | follow-up hardening | not implemented (queue just grows e2e latency) |
+| Automated test suite | pre-launch | `tests/` still empty |

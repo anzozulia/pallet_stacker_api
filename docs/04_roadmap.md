@@ -4,13 +4,14 @@ The build sequence. Each phase is small, independently testable, and leaves the
 project in a working state. No phase starts until its inputs (decisions, prior
 phase) are green.
 
-**Status (2026-06-01): Phases 0–5 are complete and committed; the service runs
-end-to-end (submit → poll → done, plus 400/429 and the hard timeout, verified
-live).** Phase 4/7 polish landed too (per-IP rate limiting, structured logging,
-LICENSE, `.env.example`). **Remaining: Phase 6 (load test + tuning) and the rest
-of Phase 7 (this docs refresh; optional result caching). A note on Phase 1's
-acceptance: the adapter is built and exercised by `scripts/smoke_e2e.sh`, but the
-unit-test suite it called for does not exist yet — `tests/` is still empty.**
+**Status (2026-06-01): Phases 0–6 are complete and committed; the service runs
+end-to-end and is load-tested.** Phase 6 pinned the operational config (4 workers ×
+OMP=2; `MAX_BOXES=500`; soft 90 / hard 120) and confirmed all 7 MVP success
+criteria pass under load — see [`05_load_profile.md`](05_load_profile.md). Phase
+4/7 polish also landed (per-IP rate limiting, structured logging, LICENSE,
+`.env.example`). **Remaining: the rest of Phase 7 — an automated test suite
+(`tests/` is still empty), optional result caching, optional queue-saturation
+`503`.**
 
 Effort markers are rough (½d = half a day) and assume the core algorithm is used
 as-is.
@@ -65,14 +66,17 @@ extensions**) and `docker-compose.yml` (api + redis + worker). Config via env
 - **Done when:** `docker compose up` brings up a working service; submit/poll works
   against it; restart-safe (state in Redis).
 
-## Phase 6 — Load test & tuning ⏳ (next) — ~1 d
-Validate the scaling model and pin the operational config.
-- Drive concurrent submissions at the cap; measure throughput, latency, queue
-  depth, worker saturation.
-- Tune `workers × OMP_NUM_THREADS` (D4) and finalise `MAX_BOXES` (D5) and the
-  budgets (D6) from real numbers.
-- **Done when:** a documented load profile + a recommended deployment config exist;
-  the MVP success criteria (`00_PLAN.md` §7) all pass.
+## Phase 6 — Load test & tuning ✅ — ~1 d
+Validated the scaling model and pinned the operational config. Full write-up:
+[`05_load_profile.md`](05_load_profile.md); raw data in `../results/loadtest/`.
+- Built `scripts/loadtest.py` (stdlib harness) + `docker-compose.loadtest.yml`;
+  swept `workers × OMP_NUM_THREADS` on the 10-core Docker VM.
+- **Result:** solves are convergence-bounded (threads raise throughput);
+  `OMP=2, workers ≈ cores/2` is the sweet spot (OMP=1 risks the big-job budget).
+  Tuned D4 (shipped default **4w × OMP=2**), confirmed D5 (`MAX_BOXES=500` safe
+  under contention) and D6 (soft 90 / hard 120; hard-kill verified).
+- **All 7 MVP success criteria (`00_PLAN.md` §7) pass** under load — see
+  `05_load_profile.md` §5.
 
 ## Phase 7 — Polish & launch prep ◑ (in progress) — ~½–1 d
 README/run docs, structured logging + basic metrics, a minimal landing/usage note,

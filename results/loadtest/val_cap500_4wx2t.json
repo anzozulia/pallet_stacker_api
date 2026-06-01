@@ -1,0 +1,144 @@
+{
+ "label": "4wx2t_cap500",
+ "config": {
+  "n_boxes": 500,
+  "budget_s": 90.0,
+  "n_jobs": 8
+ },
+ "n_jobs": 8,
+ "n_done": 8,
+ "statuses": {
+  "done": 8
+ },
+ "wall_s": 88.28,
+ "throughput_jobs_per_min": 5.44,
+ "observed_max_concurrency": 4,
+ "solve_s": {
+  "p50": 41.57,
+  "p95": 49.75,
+  "max": 49.75
+ },
+ "e2e_s": {
+  "p50": 73.5,
+  "p95": 88.22,
+  "max": 88.22
+ },
+ "queue_wait_s": {
+  "p50": 32.97,
+  "p95": 42.11
+ },
+ "records": [
+  {
+   "job_id": "fecb76628a7f40e1b1748323ed84e2ff",
+   "status": "done",
+   "t_submit": 1780318202.803562,
+   "t_first_running": 1780318202.84971,
+   "t_done": 1780318244.422462,
+   "queue_wait_s": 0.046148061752319336,
+   "solve_s": 41.57275199890137,
+   "e2e_s": 41.61890006065369,
+   "items_packed": 105,
+   "items_unpacked": 395,
+   "pallets_used": 1,
+   "error": null
+  },
+  {
+   "job_id": "f473d517ffef4171ae45125e0cc87026",
+   "status": "done",
+   "t_submit": 1780318202.810776,
+   "t_first_running": 1780318203.3611982,
+   "t_done": 1780318240.866122,
+   "queue_wait_s": 0.550422191619873,
+   "solve_s": 37.504923820495605,
+   "e2e_s": 38.05534601211548,
+   "items_packed": 87,
+   "items_unpacked": 413,
+   "pallets_used": 1,
+   "error": null
+  },
+  {
+   "job_id": "47051874153c4ff8a26f2e8e4d4fe9ec",
+   "status": "done",
+   "t_submit": 1780318202.817247,
+   "t_first_running": 1780318203.361679,
+   "t_done": 1780318240.831666,
+   "queue_wait_s": 0.5444321632385254,
+   "solve_s": 37.46998691558838,
+   "e2e_s": 38.014419078826904,
+   "items_packed": 98,
+   "items_unpacked": 402,
+   "pallets_used": 1,
+   "error": null
+  },
+  {
+   "job_id": "77a2c75868a34f9f83bc0fd13c93fc82",
+   "status": "done",
+   "t_submit": 1780318202.8242838,
+   "t_first_running": 1780318203.359874,
+   "t_done": 1780318235.2766101,
+   "queue_wait_s": 0.5355901718139648,
+   "solve_s": 31.916736125946045,
+   "e2e_s": 32.45232629776001,
+   "items_packed": 110,
+   "items_unpacked": 390,
+   "pallets_used": 1,
+   "error": null
+  },
+  {
+   "job_id": "89c1c331ca3e4139893691d6970537f4",
+   "status": "done",
+   "t_submit": 1780318202.830487,
+   "t_first_running": 1780318235.796272,
+   "t_done": 1780318285.541292,
+   "queue_wait_s": 32.96578502655029,
+   "solve_s": 49.74501991271973,
+   "e2e_s": 82.71080493927002,
+   "items_packed": 168,
+   "items_unpacked": 332,
+   "pallets_used": 1,
+   "error": null
+  },
+  {
+   "job_id": "7873daeaa01d40e2bc6ed9d9ca04dd84",
+   "status": "done",
+   "t_submit": 1780318202.836401,
+   "t_first_running": 1780318241.336087,
+   "t_done": 1780318276.335923,
+   "queue_wait_s": 38.49968600273132,
+   "solve_s": 34.99983596801758,
+   "e2e_s": 73.4995219707489,
+   "items_packed": 130,
+   "items_unpacked": 370,
+   "pallets_used": 1,
+   "error": null
+  },
+  {
+   "job_id": "f35a664f2c3744de9dadddd5ae32d07b",
+   "status": "done",
+   "t_submit": 1780318202.8414779,
+   "t_first_running": 1780318241.3861618,
+   "t_done": 1780318291.0638762,
+   "queue_wait_s": 38.54468393325806,
+   "solve_s": 49.677714347839355,
+   "e2e_s": 88.22239828109741,
+   "items_packed": 146,
+   "items_unpacked": 354,
+   "pallets_used": 1,
+   "error": null
+  },
+  {
+   "job_id": "8f4d7ce77a9c4dd2b4093793d24d439f",
+   "status": "done",
+   "t_submit": 1780318202.84698,
+   "t_first_running": 1780318244.960484,
+   "t_done": 1780318288.097785,
+   "queue_wait_s": 42.11350393295288,
+   "solve_s": 43.137300968170166,
+   "e2e_s": 85.25080490112305,
+   "items_packed": 146,
+   "items_unpacked": 354,
+   "pallets_used": 1,
+   "error": null
+  }
+ ]
+}

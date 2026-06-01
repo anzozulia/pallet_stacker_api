@@ -71,6 +71,7 @@ it adds the HTTP/async/scaling/operational layer around it.
 | [`docs/02_api_contract.md`](docs/02_api_contract.md) | Endpoints, request/response JSON, error model |
 | [`docs/03_design_decisions.md`](docs/03_design_decisions.md) | The decisions log (ADR-style) and their rationale |
 | [`docs/04_roadmap.md`](docs/04_roadmap.md) | Phased build plan, milestones, acceptance criteria |
+| [`docs/05_load_profile.md`](docs/05_load_profile.md) | Phase 6 load test: scaling sweep, recommended config, criteria validation |
 
 ## Repository layout
 
