@@ -80,14 +80,14 @@ def fast_cfg() -> dict:
 
 @pytest.fixture
 def pack_payload():
-    """Factory for a valid /pack request dict. `bad=True` makes the spatial dims
-    float, which the core gate must reject (a 400 / PackingInputError)."""
+    """Factory for a valid /pack request dict. `bad=True` gives all boxes the same
+    id — a contract violation only the core gate catches (a 400 / PackingInputError),
+    as opposed to a schema violation (422)."""
     def _make(n_boxes: int = 3, *, max_pallets: int = 1, budget=None,
               seed=None, bad: bool = False) -> dict:
-        length = 300.5 if bad else 300
         boxes = [{
-            "id": f"B{i:03d}",
-            "length": length, "width": 200, "height": 150,
+            "id": ("DUP" if bad else f"B{i:03d}"),
+            "length": 300, "width": 200, "height": 150,
             "weight": 2.0,
         } for i in range(n_boxes)]
         opts: dict = {"max_pallets": max_pallets}

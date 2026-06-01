@@ -21,6 +21,23 @@ def test_boxin_rejects_unknown_rotation():
         BoxIn(id="B1", length=1, width=1, height=1, rotations="sideways")
 
 
+def test_boxin_rejects_non_positive_dimension():
+    with pytest.raises(ValidationError):
+        BoxIn(id="B1", length=0, width=10, height=10)       # gt=0
+
+
+def test_boxin_rejects_non_integer_dimension():
+    with pytest.raises(ValidationError):
+        BoxIn(id="B1", length=300.5, width=200, height=150)  # int field
+
+
+def test_options_reject_out_of_range_values():
+    with pytest.raises(ValidationError):
+        OptionsIn(support_ratio=2.0)                         # le=1
+    with pytest.raises(ValidationError):
+        OptionsIn(max_pallets=0)                             # ge=1
+
+
 def test_packrequest_requires_at_least_one_box():
     with pytest.raises(ValidationError):
         PackRequest(boxes=[], pallet=PalletIn(length=1, width=1, height=1))

@@ -31,9 +31,13 @@ The supported run path is Docker (the core's compiled extensions are
 Linux/OpenMP). From this directory:
 
 ```bash
-docker compose up --build          # redis + api (:8000) + 2 solver workers
+docker compose up --build          # redis + api (:8000) + 4 solver workers
 bash scripts/smoke_e2e.sh          # end-to-end check: submit -> poll -> done, + a 400
 ```
+
+**Interactive API reference:** open <http://localhost:8000/docs> (Swagger UI) — it
+fully documents every endpoint, field, and error from the live OpenAPI schema. Also
+`/redoc` (ReDoc) and `/openapi.json` (raw schema); `/` redirects to `/docs`.
 
 Then drive it directly:
 

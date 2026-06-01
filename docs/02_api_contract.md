@@ -3,6 +3,12 @@
 The HTTP surface (`schemas/` + `api/routes.py` are the implementation). All
 endpoints are under `/api/v1`. Content type `application/json`. No auth.
 
+> **Live, authoritative reference:** run the service and open
+> **`/docs`** (Swagger UI) or **`/openapi.json`**. The app is fully annotated
+> (per-field descriptions, examples, every response code, the error envelope), so
+> the generated docs are self-sufficient — this file is the design rationale; the
+> OpenAPI schema is the contract.
+
 > Maps onto the core's `Box` / `Pallet` / `PackerConfig` inputs and `to_json()`
 > output. The service is a thin translation layer over those.
 
@@ -13,10 +19,13 @@ endpoints are under `/api/v1`. Content type `application/json`. No auth.
 > shown below is **reserved and not yet populated** (clients must not depend on it
 > in v1); over-cap requests currently surface through the gate as `400 invalid_input`
 > (a `problems` entry), **not** a distinct `413`; and the `503` queue-saturation
-> response is **not implemented yet**. Also: **unlimited caps** (a `pallet.max_weight`
-> or box `max_load_on_top` omitted or `null`) appear as **`null`** in the result —
-> the service normalises the core's internal `inf`/`nan` so the JSON is strict
-> (`allow_nan=false`) safe. These are tracked follow-ups, not contract changes.
+> response is **not implemented yet**. Validation is split: schema violations
+> (wrong type, **non-integer dimension**, out-of-bounds) return `422
+> validation_error`; only duplicate ids and over-cap return `400 invalid_input`. Also: **unlimited caps** (a `pallet.max_weight`
+> or box `max_load_on_top` omitted or `null`) are **omitted** from the result —
+> the service normalises the core's internal `inf`/`nan` (so the JSON is strict
+> `allow_nan=false` safe) and drops null optional fields. These are tracked
+> follow-ups, not contract changes.
 
 ---
 

@@ -60,13 +60,20 @@ def test_submit_poll_done():
         time.sleep(1)
 
     assert status == "done", f"terminal status was {status}: {payload.get('error')}"
-    summ = payload["result"]["input_summary"]
+    res = payload["result"]
+    summ = res["input_summary"]
     assert summ["items_packed"] + summ["items_unpacked"] == 5
+    # the full result schema survives response_model coercion (placement intact)
+    item = res["pallets"][0]["items"][0]
+    assert {"item_id", "position", "dimensions"} <= set(item)
+    assert {"x", "y", "z"} <= set(item["position"])
 
 
-def test_malformed_is_400():
+def test_duplicate_id_is_400():
+    # Well-shaped but breaks the contract (duplicate id) -> the gate returns 400.
     body = {
-        "boxes": [{"id": "B1", "length": 300.5, "width": 200, "height": 150}],
+        "boxes": [{"id": "X", "length": 300, "width": 200, "height": 150},
+                  {"id": "X", "length": 300, "width": 200, "height": 150}],
         "pallet": {"length": 1200, "width": 1000, "height": 1500},
         "options": {},
     }
