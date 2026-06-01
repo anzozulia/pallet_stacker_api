@@ -1,11 +1,20 @@
-# 02 — API Contract (proposed)
+# 02 — API Contract
 
-The HTTP surface. This is the **design target**; exact field names may be refined
-during the build (`schemas/` is the implementation of this doc). All endpoints are
-under `/api/v1`. Content type `application/json`. No auth.
+The HTTP surface (`schemas/` + `api/routes.py` are the implementation). All
+endpoints are under `/api/v1`. Content type `application/json`. No auth.
 
 > Maps onto the core's `Box` / `Pallet` / `PackerConfig` inputs and `to_json()`
 > output. The service is a thin translation layer over those.
+
+> **Implementation status (v0.1.0).** Live and matching this doc: `POST /pack`
+> (`202` queued / `400 invalid_input`), `GET /jobs/{id}`
+> (`queued`→`running`→`done`/`failed`/`timeout`, `404` when expired), `GET /health`,
+> `GET /version` (`{service, core, api}`). **Deviations to know:** the `meta` block
+> shown below is **reserved and not yet populated** (clients must not depend on it
+> in v1); over-cap requests currently surface through the gate as `400 invalid_input`
+> (a `problems` entry), **not** a distinct `413`; and the `503` queue-saturation
+> response is **not implemented yet**. These are tracked follow-ups, not contract
+> changes.
 
 ---
 
@@ -166,8 +175,12 @@ no history by design).
 
 ## `GET /api/v1/version`
 
+`core` is the configured `PALLET_API_CORE_VERSION` — the pinned git ref the core
+was installed from in prod, or `"dev-mount"` when the core is mounted in dev (the
+core package exposes no `__version__`).
+
 ```json
-{ "service": "0.1.0", "core": "pallet-packer 3.13.0", "api": "v1" }
+{ "service": "0.1.0", "core": "dev-mount", "api": "v1" }
 ```
 
 ---

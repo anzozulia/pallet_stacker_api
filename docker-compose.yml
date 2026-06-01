@@ -15,6 +15,7 @@ services:
       PALLET_API_SOFT_BUDGET_S: "90"
       PALLET_API_HARD_BUDGET_S: "120"
       PALLET_API_MAX_BOXES: "500"
+      PALLET_API_CORE_VERSION: "dev-mount"   # prod: set to the pinned core git ref
     ports: ["8000:8000"]
     volumes:
       - "..:/core:ro"        # the pallet_packer core repo (dev mount, D10)

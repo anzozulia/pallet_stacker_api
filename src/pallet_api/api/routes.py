@@ -30,7 +30,7 @@ async def health(request: Request):
 
 @router.get("/version")
 async def version():
-    return {"service": settings.version, "api": "v1"}
+    return {"service": settings.version, "core": settings.core_version, "api": "v1"}
 
 
 @router.post("/pack", status_code=202, dependencies=[Depends(enforce_rate_limit)])

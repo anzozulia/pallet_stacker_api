@@ -1,7 +1,8 @@
-# Project metadata + the PLANNED dependency stack for the API service.
-# No application code exists yet (Phase 0 = scaffolding). Dependencies are the
-# intended stack from docs/03_design_decisions.md; pin exact versions in Phase 1
-# once the solver adapter is built and the core dependency (D10) is resolved.
+# Project metadata + the dependency stack for the API service.
+# The runtime stack is from docs/03_design_decisions.md (D8). The pallet_packer
+# CORE is intentionally NOT declared here: per D10 it is provided out-of-band —
+# mounted at /core (PYTHONPATH) in dev, or `pip install`ed from a pinned git ref
+# in the prod image. The version pins below mirror deploy/Dockerfile.
 
 [build-system]
 requires = ["setuptools>=68", "wheel>=0.40"]
@@ -12,23 +13,22 @@ name = "pallet-packer-api-service"
 version = "0.1.0"
 description = "Async HTTP microservice wrapping the pallet_packer BRKGA algorithm"
 requires-python = ">=3.12"
-# Planned runtime stack (see docs/03_design_decisions.md D8). Versions to be
-# pinned in Phase 1.
 dependencies = [
-    # "fastapi",          # async HTTP API
-    # "uvicorn[standard]",# ASGI server
-    # "arq",              # Redis-backed async job queue + workers
-    # "redis",            # client
-    # "pydantic",         # request/response schemas + validation
-    # "pallet-packer",    # the core algorithm (D10: dependency mechanism TBD)
+    "fastapi>=0.110",      # async HTTP API
+    "uvicorn[standard]>=0.29",  # ASGI server
+    "arq>=0.26",           # Redis-backed async job queue + workers
+    "redis>=5,<6",         # client
+    "pydantic>=2.6",       # request/response schemas + validation
+    # pallet-packer: the core algorithm — NOT declared here (D10). Provided via
+    # PYTHONPATH=/core (dev mount) or `pip install` from a pinned git ref (prod).
 ]
 
 [project.optional-dependencies]
 dev = [
-    # "pytest",
-    # "httpx",            # async test client
-    # "ruff",             # lint/format
-    # "mypy",
+    "pytest>=8",
+    "httpx>=0.27",         # async test client
+    "ruff>=0.4",           # lint/format
+    "mypy>=1.10",
 ]
 
 [tool.setuptools.packages.find]

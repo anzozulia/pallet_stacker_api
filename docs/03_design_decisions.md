@@ -60,7 +60,7 @@ integer grid — non-integer dims produce real geometric overlaps (verified). Un
 are caller-defined (mm/cm/inch) and must be consistent. *Rejected:* accept floats
 and round (produces invalid packings).
 
-### D8 — Stack: FastAPI + arq + Redis + pydantic — **PROPOSED**
+### D8 — Stack: FastAPI + arq + Redis + pydantic — **ACCEPTED (implemented)**
 FastAPI/uvicorn for the async HTTP API; **arq** for the Redis-backed async job
 queue + worker loop (async-native, matches FastAPI; lighter than Celery, async
 unlike RQ); pydantic for schema validation and the JSON⇄core-object mapping.
@@ -68,7 +68,7 @@ unlike RQ); pydantic for schema validation and the JSON⇄core-object mapping.
 arq. *Rejected for MVP:* Celery (heavyweight), RQ (sync), raw Redis lists
 (reinventing the worker loop + timeouts + retries).
 
-### D9 — Configuration via environment — **PROPOSED**
+### D9 — Configuration via environment — **ACCEPTED (implemented)**
 All operational knobs are environment-driven (12-factor): `REDIS_URL`,
 `MAX_BOXES`, `SOFT_BUDGET_S`, `HARD_BUDGET_S`, `DEFAULT_MAX_PALLETS`,
 `OMP_NUM_THREADS` (per worker), `RESULT_TTL_S`, `RATE_LIMIT_*`, `DEFAULT_SEED`.
@@ -90,11 +90,12 @@ adapter import point. Two acquisition modes:
 from upstream). The `solver/` adapter is the only module that imports the core, so
 swapping dev↔prod acquisition touches nothing else.
 
-### D11 — Determinism / seed handling — **PROPOSED**
+### D11 — Determinism / seed handling — **ACCEPTED (seed); caching OPEN**
 Default to a fixed service seed so identical input yields an identical plan
 (reproducible, debuggable). Allow an optional caller-supplied `seed`. *Why:* the
 core is bit-identical at a fixed seed and thread-invariant; exposing it is free and
-useful. *Open sub-question:* whether to also cache results by input-hash to dedup
+useful. *Implemented:* `options.seed` falls back to `DEFAULT_SEED` (adapter). *Open
+sub-question (not done):* whether to also cache results by input-hash to dedup
 identical resubmissions (a possible optimisation, not MVP).
 
 ### D12 — Honest quality expectations — **ACCEPTED (informational)**
@@ -104,20 +105,29 @@ homogeneous). *Why it matters here:* set user expectations honestly in any
 service-facing copy; do not market it as state-of-the-art. Fine for a free general
 tool. See the core repo's `docs/reports/31`.
 
-### D13 — Per-IP rate limiting — **PROPOSED**
-Basic per-IP rate limit on `POST /pack` (e.g. a small number of in-flight or
-per-minute jobs) plus the box cap. *Why:* abuse protection without accounts.
-Token-bucket in Redis. Exact limits are config (D9). *Rejected for MVP:* API keys
-/ quotas (implies accounts).
+### D13 — Per-IP rate limiting — **ACCEPTED (implemented)**
+Basic per-IP rate limit on `POST /pack` plus the box cap. *Why:* abuse protection
+without accounts. *Implemented:* a fixed-window per-minute counter in Redis
+(`api/limits.py`), limit from `RATE_LIMIT_PER_MIN` (D9); over-limit → `429`.
+*Known follow-up:* the client IP is taken from `request.client` only — behind a
+reverse proxy/LB it should honour `X-Forwarded-For` (a `trust_proxy` switch), else
+all forwarded clients share one bucket. *Rejected for MVP:* API keys / quotas
+(implies accounts); token-bucket (fixed-window is sufficient here).
 
 ---
 
-## Decisions still needed before specific phases
+## Decisions still open
 
-| Needs a call | Blocks | Default if undecided |
+Most build-time decisions are now settled (D10 resolved → core mounted at `/core`
+in dev, pinned `pip install` in prod; the v1 constraint surface is weight,
+fragility, support, group, `max_pallets`, overhang, with CoG at defaults). What
+remains is the operational tuning that **Phase 6 (load test) produces**, plus one
+optional feature:
+
+| Open item | Resolved by | Current value (default in use) |
 |---|---|---|
-| D10 core-dependency mechanism | Phase 1 (solver adapter) | pip-from-git at a pinned tag |
-| Exact `MAX_BOXES` (400 vs 500) | Phase 4 (limits) | 500, revisit after load test |
-| `SOFT`/`HARD` budget values | Phase 4 (timeouts) | soft 90 s / hard 120 s |
-| Default `OMP_NUM_THREADS` + workers | Phase 6 (load test) | 4 workers × 2 threads per 8-core box |
-| Which advanced constraints in v1 | Phase 2 (schemas) | weight, fragility, support, group, max_pallets, overhang; CoG at defaults |
+| Final `MAX_BOXES` (400 vs 500) | Phase 6 load test | 500 |
+| Final `SOFT`/`HARD` budgets | Phase 6 load test | soft 90 s / hard 120 s |
+| `OMP_NUM_THREADS` × worker count | Phase 6 load test | 2 threads × 2 workers (compose default) |
+| Result caching by input-hash (D11) | optional, post-MVP | not implemented |
+| `X-Forwarded-For` / `trust_proxy` for rate limiting (D13) | follow-up hardening | uses `request.client` only |

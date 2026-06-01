@@ -46,6 +46,9 @@ class Settings:
 
     # --- meta ---
     version: str = os.getenv("PALLET_API_VERSION", "0.1.0")
+    # The core algorithm has no __version__; its version is the pinned git ref it
+    # was installed from (prod) or "dev-mount" (dev). Surfaced by GET /version.
+    core_version: str = os.getenv("PALLET_API_CORE_VERSION", "unknown")
 
     def solver_cfg(self) -> dict:
         """The picklable settings bundle passed into the solve subprocess."""
