@@ -75,16 +75,20 @@ All operational knobs are environment-driven (12-factor): `REDIS_URL`,
 *Why:* tune per deployment without code changes; the worker/thread split and caps
 are exactly the things that vary by host.
 
-### D10 — Core algorithm as a pinned dependency — **OPEN**
-The worker imports `pallet_packer`. How it is acquired is unresolved:
-- **(a) pip install from the core git repo at a pinned commit/tag** — clean
-  separation, explicit version, reproducible builds. *Leaning here.*
-- (b) Git submodule — tighter coupling, lets you build the Cython extensions in
-  the worker image from source.
-- (c) Vendored copy — simplest offline, but drifts from upstream.
-The worker image **must build the core's Cython extensions** (the core's
-Dockerfile shows how). Decide before Phase 1. The `solver/` adapter is the single
-import point, which keeps whichever choice we make contained.
+### D10 — Core algorithm as a pinned dependency — **ACCEPTED**
+The worker imports `pallet_packer`. Resolution: **the core is an installed
+package, never vendored or modified here**, reached through the single `solver/`
+adapter import point. Two acquisition modes:
+- **Production / CI:** `pip install` the core from its git repo at a **pinned
+  commit/tag**; the service Docker image **builds the Cython extensions** in the
+  image (toolchain + `numpy`/`cython` build deps, exactly like the core's own
+  Dockerfile). Reproducible, explicit version, clean separation.
+- **Local dev:** the core repo is **mounted read-only** into the containers at
+  `/core` with `PYTHONPATH=/core`, reusing its already-built platform `.so`. Zero
+  rebuild, instant iteration. This is what `docker-compose.yml` does today.
+*Rejected:* git submodule (tighter coupling than needed) and vendoring (drifts
+from upstream). The `solver/` adapter is the only module that imports the core, so
+swapping dev↔prod acquisition touches nothing else.
 
 ### D11 — Determinism / seed handling — **PROPOSED**
 Default to a fixed service seed so identical input yields an identical plan
