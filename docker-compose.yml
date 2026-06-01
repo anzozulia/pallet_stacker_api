@@ -1,5 +1,6 @@
-# Local dev stack: redis + api + 2 workers. The pallet_packer core is mounted
-# read-only from the parent dir (D10 dev mode). `docker compose up --build`.
+# Standalone stack: redis + api + 4 workers. The pallet_packer core is vendored
+# (core/) and built into the image — no host mount, no external dependency.
+#   docker compose up --build
 services:
   redis:
     image: redis:7-alpine
@@ -15,10 +16,8 @@ services:
       PALLET_API_SOFT_BUDGET_S: "90"
       PALLET_API_HARD_BUDGET_S: "120"
       PALLET_API_MAX_BOXES: "500"
-      PALLET_API_CORE_VERSION: "dev-mount"   # prod: set to the pinned core git ref
+      PALLET_API_CORE_VERSION: "3.13.0+fd2ea2c"   # vendored core (see core/VENDOR.md)
     ports: ["8000:8000"]
-    volumes:
-      - "..:/core:ro"        # the pallet_packer core repo (dev mount, D10)
     depends_on: [redis]
 
   worker:
@@ -31,8 +30,6 @@ services:
       PALLET_API_SOFT_BUDGET_S: "90"
       PALLET_API_HARD_BUDGET_S: "120"
       OMP_NUM_THREADS: "2"
-    volumes:
-      - "..:/core:ro"
     depends_on: [redis]
     deploy:
       # 4 workers x OMP=2 = 4 concurrent solves on 8 of ~10 cores (D4). This is the

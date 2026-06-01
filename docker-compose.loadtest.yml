@@ -20,8 +20,6 @@ services:
       PALLET_API_RATE_LIMIT_PER_MIN: "1000000"   # effectively off for load testing
       PALLET_API_CORE_VERSION: "loadtest"
     ports: ["8000:8000"]
-    volumes:
-      - "..:/core:ro"
     depends_on: [redis]
 
   worker:
@@ -34,6 +32,4 @@ services:
       PALLET_API_SOFT_BUDGET_S: "${LT_SOFT:-90}"
       PALLET_API_HARD_BUDGET_S: "${LT_HARD:-120}"
       OMP_NUM_THREADS: "${LT_OMP:-2}"
-    volumes:
-      - "..:/core:ro"
     depends_on: [redis]

@@ -86,20 +86,22 @@ All operational knobs are environment-driven (12-factor): `REDIS_URL`,
 *Why:* tune per deployment without code changes; the worker/thread split and caps
 are exactly the things that vary by host.
 
-### D10 — Core algorithm as a pinned dependency — **ACCEPTED**
-The worker imports `pallet_packer`. Resolution: **the core is an installed
-package, never vendored or modified here**, reached through the single `solver/`
-adapter import point. Two acquisition modes:
-- **Production / CI:** `pip install` the core from its git repo at a **pinned
-  commit/tag**; the service Docker image **builds the Cython extensions** in the
-  image (toolchain + `numpy`/`cython` build deps, exactly like the core's own
-  Dockerfile). Reproducible, explicit version, clean separation.
-- **Local dev:** the core repo is **mounted read-only** into the containers at
-  `/core` with `PYTHONPATH=/core`, reusing its already-built platform `.so`. Zero
-  rebuild, instant iteration. This is what `docker-compose.yml` does today.
-*Rejected:* git submodule (tighter coupling than needed) and vendoring (drifts
-from upstream). The `solver/` adapter is the only module that imports the core, so
-swapping dev↔prod acquisition touches nothing else.
+### D10 — Core algorithm is VENDORED — **ACCEPTED (revised)**
+The worker imports `pallet_packer`, reached through the single `solver/` adapter
+import point. **The core is vendored into this repo under `core/`** (source only —
+`.py` + Cython `.pyx`/`.pxd` + build files; see `core/VENDOR.md`). The Docker image
+builds it in a builder stage (`pip wheel ./core`, compiling the 6 Cython/OpenMP
+extensions) and installs the wheel into a slim runtime; `pallet_packer` is then a
+normal installed package (no host mount, no `PYTHONPATH=/core`).
+*Why:* this service is a **standalone, independent project** — anyone who clones it
+gets a working `docker compose up --build` with no external repo, no sibling-dir
+mount, and no pip-from-git of a separate (possibly private) repo. Provenance +
+refresh instructions live in `core/VENDOR.md`.
+*Supersedes* the earlier plan (pip-install-from-git in prod + a read-only `/core`
+dev mount), which required the core to be published and a specific two-repo layout.
+*Trade-off accepted:* the vendored copy can drift from upstream — refresh it
+deliberately (re-copy + bump the commit in `core/VENDOR.md`). The adapter is the
+only module that imports the core, so the engine stays swappable.
 
 ### D11 — Determinism / seed handling — **ACCEPTED (seed); caching OPEN**
 Default to a fixed service seed so identical input yields an identical plan

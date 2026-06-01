@@ -31,7 +31,12 @@ for i in $(seq 1 40); do
   sleep 1
 done
 
-echo "== bad input (expect 400) =="
+echo "== bad input: non-integer dim (expect 422) =="
 curl -s -o /dev/null -w "  HTTP %{http_code}\n" -X POST "$BASE/pack" \
   -H 'content-type: application/json' \
   -d '{"boxes":[{"id":"x","length":100.5,"width":100,"height":100}],"pallet":{"length":1000,"width":800,"height":600}}'
+
+echo "== bad input: duplicate id (expect 400) =="
+curl -s -o /dev/null -w "  HTTP %{http_code}\n" -X POST "$BASE/pack" \
+  -H 'content-type: application/json' \
+  -d '{"boxes":[{"id":"x","length":100,"width":100,"height":100},{"id":"x","length":100,"width":100,"height":100}],"pallet":{"length":1000,"width":800,"height":600}}'

@@ -186,12 +186,11 @@ no history by design).
 
 ## `GET /api/v1/version`
 
-`core` is the configured `PALLET_API_CORE_VERSION` — the pinned git ref the core
-was installed from in prod, or `"dev-mount"` when the core is mounted in dev (the
-core package exposes no `__version__`).
+`core` is the configured `PALLET_API_CORE_VERSION` — the version of the vendored
+core (see `core/VENDOR.md`; the core package exposes no `__version__`).
 
 ```json
-{ "service": "0.1.0", "core": "dev-mount", "api": "v1" }
+{ "service": "0.1.0", "core": "3.13.0+fd2ea2c", "api": "v1" }
 ```
 
 ---

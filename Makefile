@@ -1,10 +1,9 @@
-# pallet-packer-api-service — dev convenience targets.
-# The supported run path is `make up` (Docker): the core's compiled extensions
-# are Linux/OpenMP and won't load on a plain host. `make run`/`make worker` are
-# for a host that already has the core importable (PYTHONPATH=/path/to/core +
-# libgomp). See docs/04_roadmap.md.
+# pallet-packer-api-service — management + dev targets.
+# The supported run path is Docker (`make up`): the vendored core (core/) and its
+# Cython extensions are built into the image. `make run`/`worker` run on the host
+# and need the core built locally first (`pip install ./core`); Docker is preferred.
 
-.PHONY: help install dev lint test test-docker test-e2e run worker up down smoke loadtest
+.PHONY: help install lint test test-docker test-e2e run worker up down logs ps clean smoke loadtest
 
 help:  ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -26,21 +25,30 @@ test-docker:  ## Run the FULL suite inside the container (real core + Redis)
 
 test-e2e:  ## Bring up the stack, run the e2e tests against it, tear down (needs host pytest)
 	docker compose up -d --build
-	@for i in $$(seq 1 60); do curl -fsS localhost:8000/api/v1/health >/dev/null 2>&1 && break; sleep 1; done
+	@for i in $$(seq 1 90); do curl -fsS localhost:8000/api/v1/health >/dev/null 2>&1 && break; sleep 1; done
 	-pytest tests/test_e2e.py
 	docker compose down
 
-run:  ## Run the API locally (needs the core importable; Docker is preferred)
+run:  ## Run the API locally (needs the core built first: pip install ./core)
 	uvicorn pallet_api.api.app:app --reload
 
-worker:  ## Run a solver worker locally (needs the core importable)
+worker:  ## Run a solver worker locally (needs the core built first: pip install ./core)
 	arq pallet_api.workers.settings.WorkerSettings
 
-up:  ## docker compose up: redis + api + 2 workers (builds the image)
+up:  ## docker compose up: redis + api + 4 workers (builds the image)
 	docker compose up --build
 
 down:  ## docker compose down
 	docker compose down
+
+logs:  ## Follow the stack logs
+	docker compose logs -f
+
+ps:  ## List the stack's services
+	docker compose ps
+
+clean:  ## Stop the stack and remove its volumes + locally-built images
+	docker compose down -v --rmi local
 
 smoke:  ## Run the end-to-end smoke test against a running stack
 	bash scripts/smoke_e2e.sh

@@ -31,6 +31,10 @@ htmlcov/
 *.local.json
 scratch/
 
-# The vendored/installed core algorithm package (if pulled in locally during dev)
-vendor/
-pallet_packer/
+# Vendored core (core/) is committed as SOURCE ONLY — ignore any build artifacts
+# produced by building it locally (the Docker image builds it in an isolated stage).
+core/**/*.so
+core/**/*.c
+core/**/*.html
+core/build/
+core/**/*.egg-info/

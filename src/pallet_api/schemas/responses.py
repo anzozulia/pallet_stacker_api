@@ -31,13 +31,12 @@ class VersionInfo(BaseModel):
     """Service + core versions. `GET /version`."""
     service: str = Field(..., description="This API service's version.",
                          examples=["0.1.0"])
-    core: str = Field(..., description="The pinned `pallet_packer` core version — the "
-                      "git ref it was installed from in prod, or `dev-mount` in dev.",
-                      examples=["dev-mount"])
+    core: str = Field(..., description="The vendored `pallet_packer` core version "
+                      "(see core/VENDOR.md).", examples=["3.13.0+fd2ea2c"])
     api: str = Field(..., description="API contract version (URL prefix `/api/v1`).",
                      examples=["v1"])
     model_config = {"json_schema_extra": {"examples": [
-        {"service": "0.1.0", "core": "dev-mount", "api": "v1"}]}}
+        {"service": "0.1.0", "core": "3.13.0+fd2ea2c", "api": "v1"}]}}
 
 
 # --------------------------------------------------------------- accept + error

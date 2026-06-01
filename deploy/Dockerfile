@@ -1,31 +1,42 @@
-# Service image (shared by the API and worker processes).
+# Standalone service image (shared by the API and worker processes).
 #
-# DEV: the pallet_packer core is mounted at /core (docker-compose volume) and put
-#      on PYTHONPATH, reusing its already-built platform .so. See D10.
-# PROD: drop the /core mount and instead bake the core into the image, e.g.:
-#         RUN apt-get install -y build-essential gcc g++ git \
-#          && pip install "pallet-packer @ git+https://github.com/anzozulia/pallet_stacker_research.git@<TAG>"
-#       (this builds the Cython extensions in the image) and remove /core from
-#       PYTHONPATH below.
-FROM python:3.13-slim-bookworm
+# Everything is in THIS repo — the pallet_packer core is vendored under core/ and
+# built here; there is no external dependency and no host mount. The builder stage
+# compiles the core's 6 Cython extensions into a wheel; the slim runtime stage
+# installs that wheel + the service deps. `docker compose up --build` just works.
 
-# Service deps + the core's RUNTIME deps (the mounted core needs these to import).
+# ---------- builder: compile the vendored core into a wheel ----------
+FROM python:3.13-slim-bookworm AS builder
+# build-essential = gcc/g++ (the .pyx are compiled with -O3/-ffast-math, and the
+# two batch decoders with -fopenmp). Cython + numpy come via the core's
+# pyproject build-system (PEP 517 isolated build).
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /build
+COPY core/ /build/core/
+RUN pip wheel --no-cache-dir --no-deps --wheel-dir /wheels /build/core/
+
+# ---------- runtime: slim image, no toolchain ----------
+FROM python:3.13-slim-bookworm
+# libgomp1 = the OpenMP runtime the core's prange-parallel .so link against
+# (-fopenmp). Runtime lib only — no compiler in the final image.
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /wheels /wheels
+# Service deps + the vendored core wheel (which pulls numpy/numba/ortools).
 RUN pip install --no-cache-dir \
         "fastapi>=0.110" "uvicorn[standard]>=0.29" "arq>=0.26" "redis>=5,<6" \
         "pydantic>=2.6" \
-        "numpy>=2.4,<2.5" "numba>=0.65,<0.66" "ortools>=9.10,<10.0"
-
-# libgomp1 = the OpenMP runtime the core's prange-parallel .so link against
-# (-fopenmp). Without it the batch Cython decoders fail to load and the solver
-# falls back to a non-existent batch path. Runtime lib only, no toolchain.
-RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
+        /wheels/pallet_packer*.whl \
+    && rm -rf /wheels
 
 WORKDIR /app
 COPY src/ /app/src/
 
-# /app/src -> the service package; /core -> the mounted pallet_packer core (dev).
-ENV PYTHONPATH=/app/src:/core \
+# pallet_packer is an installed package (site-packages); only the service package
+# needs to be on PYTHONPATH.
+ENV PYTHONPATH=/app/src \
     PYTHONUNBUFFERED=1 \
     OMP_NUM_THREADS=2
 
