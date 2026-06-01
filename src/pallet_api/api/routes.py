@@ -1,17 +1,21 @@
 """HTTP routes — see docs/02_api_contract.md."""
 from __future__ import annotations
 
+import logging
+
 from arq.jobs import Job, JobStatus
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from pallet_packer import PackingInputError
 
 from pallet_api.config import settings
+from pallet_api.api.limits import enforce_rate_limit
 from pallet_api.schemas import PackRequest
 from pallet_api.solver.adapter import validate_request
 
 router = APIRouter()
+log = logging.getLogger("pallet_api")
 
 
 @router.get("/health")
@@ -29,7 +33,7 @@ async def version():
     return {"service": settings.version, "api": "v1"}
 
 
-@router.post("/pack", status_code=202)
+@router.post("/pack", status_code=202, dependencies=[Depends(enforce_rate_limit)])
 async def pack(req: PackRequest, request: Request):
     payload = req.model_dump()
     # The input contract (positive-integer dims, <=max_boxes, finite caps, …) is
@@ -42,6 +46,9 @@ async def pack(req: PackRequest, request: Request):
             "message": "Request did not satisfy the packing input contract.",
             "problems": list(e.problems)}})
     job = await request.app.state.redis.enqueue_job("solve_job", payload)
+    log.info("job_submitted job_id=%s n_boxes=%d max_pallets=%s",
+             job.job_id, len(payload["boxes"]),
+             payload.get("options", {}).get("max_pallets"))
     return {"job_id": job.job_id, "status": "queued",
             "links": {"self": f"/api/v1/jobs/{job.job_id}"}}
 

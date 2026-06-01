@@ -2,6 +2,7 @@
 (queue, job status, results) lives in Redis via an arq pool."""
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 
 from arq import create_pool
@@ -22,6 +23,9 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s")
     app = FastAPI(title="pallet-packer-api", version=settings.version,
                   lifespan=lifespan)
     app.include_router(router, prefix="/api/v1")
