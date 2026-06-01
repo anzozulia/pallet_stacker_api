@@ -134,7 +134,7 @@ def _max_overlap(records) -> int:
     evts = []
     for r in records:
         a, b = r.get("t_first_running"), r.get("t_done")
-        if a and b and b >= a:
+        if a is not None and b is not None and b >= a:
             evts.append((a, 1)); evts.append((b, -1))
     evts.sort()
     cur = best = 0

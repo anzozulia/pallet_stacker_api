@@ -13,8 +13,10 @@ endpoints are under `/api/v1`. Content type `application/json`. No auth.
 > shown below is **reserved and not yet populated** (clients must not depend on it
 > in v1); over-cap requests currently surface through the gate as `400 invalid_input`
 > (a `problems` entry), **not** a distinct `413`; and the `503` queue-saturation
-> response is **not implemented yet**. These are tracked follow-ups, not contract
-> changes.
+> response is **not implemented yet**. Also: **unlimited caps** (a `pallet.max_weight`
+> or box `max_load_on_top` omitted or `null`) appear as **`null`** in the result —
+> the service normalises the core's internal `inf`/`nan` so the JSON is strict
+> (`allow_nan=false`) safe. These are tracked follow-ups, not contract changes.
 
 ---
 

@@ -4,7 +4,7 @@
 # for a host that already has the core importable (PYTHONPATH=/path/to/core +
 # libgomp). See docs/04_roadmap.md.
 
-.PHONY: help install dev lint test run worker up down smoke loadtest
+.PHONY: help install dev lint test test-docker test-e2e run worker up down smoke loadtest
 
 help:  ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -16,8 +16,19 @@ install:  ## Install the service + dev deps (editable)
 lint:  ## Lint + format check
 	ruff check src tests
 
-test:  ## Run the test suite
-	pytest -q
+test:  ## Run host-runnable tests (core/redis/e2e tiers skip without them)
+	pytest
+
+test-docker:  ## Run the FULL suite inside the container (real core + Redis)
+	docker compose -f docker-compose.loadtest.yml run --rm -v "$$(pwd)":/app -w /app api \
+		sh -c "pip install -q pytest httpx && pytest"
+	docker compose -f docker-compose.loadtest.yml down
+
+test-e2e:  ## Bring up the stack, run the e2e tests against it, tear down (needs host pytest)
+	docker compose up -d --build
+	@for i in $$(seq 1 60); do curl -fsS localhost:8000/api/v1/health >/dev/null 2>&1 && break; sleep 1; done
+	-pytest tests/test_e2e.py
+	docker compose down
 
 run:  ## Run the API locally (needs the core importable; Docker is preferred)
 	uvicorn pallet_api.api.app:app --reload

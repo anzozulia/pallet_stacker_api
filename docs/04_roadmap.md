@@ -9,9 +9,12 @@ end-to-end and is load-tested.** Phase 6 pinned the operational config (4 worker
 OMP=2; `MAX_BOXES=500`; soft 90 / hard 120) and confirmed all 7 MVP success
 criteria pass under load — see [`05_load_profile.md`](05_load_profile.md). Phase
 4/7 polish also landed (per-IP rate limiting, structured logging, LICENSE,
-`.env.example`). **Remaining: the rest of Phase 7 — an automated test suite
-(`tests/` is still empty), optional result caching, optional queue-saturation
-`503`.**
+`.env.example`). A **pytest suite** now covers schemas, the adapter (Phase 1
+acceptance), the hard-timeout runner, the worker task, the HTTP contract, and a
+live e2e — and it already caught + fixed two real bugs (a result-serialisation
+`inf` 500 on unlimited caps, and a load-test helper edge case). **Remaining
+(optional, post-MVP): result caching (D11), queue-saturation `503`, and the
+`X-Forwarded-For`/`trust_proxy` rate-limit hardening.**
 
 Effort markers are rough (½d = half a day) and assume the core algorithm is used
 as-is.
@@ -78,14 +81,16 @@ Validated the scaling model and pinned the operational config. Full write-up:
 - **All 7 MVP success criteria (`00_PLAN.md` §7) pass** under load — see
   `05_load_profile.md` §5.
 
-## Phase 7 — Polish & launch prep ◑ (in progress) — ~½–1 d
+## Phase 7 — Polish & launch prep ◑ (mostly done) — ~½–1 d
 README/run docs, structured logging + basic metrics, a minimal landing/usage note,
 licence (open-source). Optional: result caching by input-hash (D11).
 - **Done:** structured logging; MIT `LICENSE`; `.env.example`; README quick-start +
-  honest status; docs refreshed to match the implementation.
-- **Remaining:** an automated test suite (`tests/` is empty); basic metrics;
-  optional result caching (D11).
-- **Done when:** a newcomer can run it and call it from the docs alone.
+  honest status; docs refreshed to match the implementation; **pytest suite**
+  (`tests/`, two-tier — see `tests/README.md`) covering schemas, adapter (Phase 1
+  acceptance), runner timeout, worker task, HTTP contract, and live e2e.
+- **Remaining (optional, post-MVP):** basic metrics; result caching (D11);
+  queue-saturation `503`; `X-Forwarded-For`/`trust_proxy` rate-limit hardening.
+- **Done when:** a newcomer can run it and call it from the docs alone. ✅
 
 ---
 

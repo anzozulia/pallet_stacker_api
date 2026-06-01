@@ -63,8 +63,24 @@ def _config(payload: Dict[str, Any]) -> PackerConfig:
     )
 
 
+def _json_safe(o: Any) -> Any:
+    """Make the core's result strict-JSON safe. Unlimited caps surface as inf
+    internally (None -> math.inf in _box/_pallet); the core echoes them in
+    to_json, but starlette's JSONResponse serialises with allow_nan=False, so a
+    raw inf/nan would 500 the result fetch. Map non-finite floats back to None
+    (= "unlimited", symmetric with the input contract)."""
+    if isinstance(o, float):
+        return o if math.isfinite(o) else None
+    if isinstance(o, dict):
+        return {k: _json_safe(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [_json_safe(v) for v in o]
+    return o
+
+
 def solve(payload: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
-    """Full solve: gate -> BRKGA -> to_json. Returns the core's result dict."""
+    """Full solve: gate -> BRKGA -> to_json. Returns the core's result dict
+    (sanitised to be strict-JSON safe — see _json_safe)."""
     boxes, pallet = build_inputs(payload)
     check_packing_input(boxes, pallet, max_boxes=cfg["max_boxes"])  # backstop
     opts = payload.get("options") or {}
@@ -79,4 +95,4 @@ def solve(payload: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         patience=cfg["patience"], n_modes=cfg["n_modes"],
         validate_input=True, verbose=False,
     )
-    return to_json(result, pallet)
+    return _json_safe(to_json(result, pallet))
