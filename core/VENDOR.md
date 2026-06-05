@@ -6,9 +6,12 @@ builds the core (Cython extensions) into the image with no external dependency.
 
 - **Package:** `pallet-packer` 3.13.0
 - **Vendored from:** `pallet_stacker_research` @ commit `fd2ea2c` (2026-06-01),
-  plus the floor-first placement fix (upstream `00df520`): the placement finders
-  prefer the lowest z on ties, so under-filled pallets get flat layouts instead of
-  corner towers. BR1-7 verified density-neutral. Kept in sync with upstream.
+  plus two floor-first placement fixes (upstream `00df520` and `9d9ab07`):
+  (1) the single-box placement finders prefer the lowest z on ties; (2) the
+  block decoder picks the largest floor footprint before stacking height
+  (`find_best_block_at_pos` + `blocks.py`), so identical boxes on a tall pallet
+  spread into flat layers instead of a corner tower. BR1-7 verified
+  density-neutral (bit-identical). Kept in sync with upstream.
 - **Contents:** source only — the `pallet_packer/` package (`.py` + Cython
   `.pyx`/`.pxd`) plus its build files (`setup.py`, `pyproject.toml`). No built
   artifacts (`.so`/`.c`/`.html`/numba caches) are committed; the Docker build
