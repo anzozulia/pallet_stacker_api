@@ -5,7 +5,10 @@ so this service is fully self-contained: `git clone` + `docker compose up --buil
 builds the core (Cython extensions) into the image with no external dependency.
 
 - **Package:** `pallet-packer` 3.13.0
-- **Vendored from:** `pallet_stacker_research` @ commit `fd2ea2c` (2026-06-01)
+- **Vendored from:** `pallet_stacker_research` @ commit `fd2ea2c` (2026-06-01),
+  plus the floor-first placement fix (upstream `00df520`): the placement finders
+  prefer the lowest z on ties, so under-filled pallets get flat layouts instead of
+  corner towers. BR1-7 verified density-neutral. Kept in sync with upstream.
 - **Contents:** source only — the `pallet_packer/` package (`.py` + Cython
   `.pyx`/`.pxd`) plus its build files (`setup.py`, `pyproject.toml`). No built
   artifacts (`.so`/`.c`/`.html`/numba caches) are committed; the Docker build
