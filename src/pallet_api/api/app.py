@@ -14,6 +14,7 @@ from arq import create_pool
 from arq.connections import RedisSettings
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -119,6 +120,18 @@ def create_app() -> FastAPI:
         openapi_tags=TAGS_METADATA,
         servers=[{"url": "/", "description": "This server (relative to the host you reached)."}],
         lifespan=lifespan,
+    )
+    # Browser cross-origin access: the static SPA front-end calls this API directly from
+    # the browser, so a cross-origin POST /pack would otherwise be blocked by the browser
+    # (the front-end then shows "Couldn't reach the packing service"). This adds the
+    # Access-Control-* headers (and answers the OPTIONS preflight). No cookies/credentials
+    # are used, so the "*" default origin is safe; override via PALLET_API_CORS_ORIGINS.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["*"],
     )
     app.add_exception_handler(StarletteHTTPException, _http_exc_handler)
     app.add_exception_handler(RequestValidationError, _validation_exc_handler)

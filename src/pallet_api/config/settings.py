@@ -17,6 +17,11 @@ def _f(name: str, default: float) -> float:
     return float(os.getenv(name, str(default)))
 
 
+def _list(name: str, default: str) -> list[str]:
+    """Parse a comma-separated env var into a stripped, non-empty list."""
+    return [item.strip() for item in os.getenv(name, default).split(",") if item.strip()]
+
+
 class Settings:
     # --- Redis / queue ---
     redis_url: str = os.getenv("PALLET_API_REDIS_URL", "redis://localhost:6379")
@@ -43,6 +48,16 @@ class Settings:
 
     # --- abuse protection ---
     rate_limit_per_min: int = _i("PALLET_API_RATE_LIMIT_PER_MIN", 30)
+
+    # --- CORS (browser cross-origin access) ---
+    # The static front-end calls this API DIRECTLY from the browser, so the API must
+    # send Access-Control-Allow-Origin for the front-end's serving origin — otherwise the
+    # browser blocks every request and the UI shows "Couldn't reach the packing service".
+    # Comma-separated list of allowed origins; "*" (the default) allows ANY origin, which
+    # is safe here because this is a no-login API that uses no cookies/credentials. Lock it
+    # down to your front-end origin(s) in production if you prefer, e.g.
+    #   PALLET_API_CORS_ORIGINS=https://app.example.com,https://www.example.com
+    cors_origins: list[str] = _list("PALLET_API_CORS_ORIGINS", "*")
 
     # --- meta ---
     version: str = os.getenv("PALLET_API_VERSION", "0.1.0")
