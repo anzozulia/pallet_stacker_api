@@ -1,0 +1,36 @@
+# Example: a SEPARATE front-end compose project that talks to the pallet-packer
+# API container-to-container over the shared `pallet-packer-net` network.
+# Copy the `networks:` wiring into your real front-end compose file.
+#
+# Prerequisite — bring the API stack up first (it creates `pallet-packer-net`):
+#     cd pallet_packer_api_service && docker compose up -d --build
+#
+# Then, from your front-end project:
+#     docker compose -f frontend-compose.example.yml up -d
+#
+# Your front-end's SERVER-SIDE code reaches the API at:
+#     http://pallet-packer-api:8000/api/v1        (no host ports, stays on-host)
+#
+# Note: this is for server-to-server calls (SSR / BFF / a proxy inside your
+# front-end container). A browser running on a user's machine is NOT on the
+# Docker network — for direct browser calls, expose the API through your
+# front-end's reverse proxy (or the public host port) instead.
+
+services:
+  frontend:
+    image: your-frontend-image:latest          # <-- replace with your image
+    environment:
+      # Server-side base URL for the pallet-packer API (container-to-container).
+      PALLET_API_BASE_URL: "http://pallet-packer-api:8000/api/v1"
+    ports: ["3000:3000"]                        # your front-end's own host port
+    networks:
+      - default                                 # your front-end's private network
+      - pallet-packer-net                       # shared link to the pallet API
+
+networks:
+  default:
+  # Joined, not created here — the pallet API stack owns it. `up` will fail with
+  # "network pallet-packer-net declared as external, but could not be found" if
+  # the API stack is not running yet (see the prerequisite above).
+  pallet-packer-net:
+    external: true

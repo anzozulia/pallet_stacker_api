@@ -1,9 +1,20 @@
 # Standalone stack: redis + api + 4 workers. The pallet_packer core is vendored
 # (core/) and built into the image — no host mount, no external dependency.
 #   docker compose up --build
+#
+# Cross-stack networking: the `api` service also joins the shared bridge network
+# `pallet-packer-net` (created by this stack), so a front-end running in a
+# SEPARATE compose project can reach it container-to-container at
+#   http://pallet-packer-api:8000/api/v1
+# — no host ports, no public hop. redis + the workers stay on the private
+# `default` network and are NOT reachable from the front-end. See the README
+# section "Connect an external front-end" + examples/frontend-compose.example.yml.
 services:
   redis:
     image: redis:7-alpine
+    # Internal only: api + workers reach redis via the `default` network DNS
+    # name `redis`. The host publish is for local debugging — drop it in
+    # production (it is not needed and exposes redis to the host).
     ports: ["6379:6379"]
 
   api:
@@ -19,6 +30,10 @@ services:
       PALLET_API_CORE_VERSION: "3.13.0+fd2ea2c"   # vendored core (see core/VENDOR.md)
     ports: ["8000:8000"]
     depends_on: [redis]
+    networks:
+      default: {}                 # private: reach redis + be reached by workers
+      pallet-packer-net:          # shared: reachable by an external front-end
+        aliases: [pallet-packer-api]
 
   worker:
     build:
@@ -37,3 +52,13 @@ services:
       # ~= cores/2, ~2 cores headroom for api+redis. Reduce on smaller hosts so
       # total worker-threads stay <= cores.
       replicas: 4
+
+networks:
+  # Private network for redis <-> api <-> worker. redis and worker have no
+  # `networks:` key, so they join ONLY this one (never the shared net).
+  default:
+  # Shared bridge an external front-end compose joins (with `external: true`).
+  # Created and owned by this stack; the fixed `name:` makes it referenceable
+  # from other projects regardless of compose project-name prefixing.
+  pallet-packer-net:
+    name: pallet-packer-net

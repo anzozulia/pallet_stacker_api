@@ -107,6 +107,42 @@ client ──HTTP──▶ API (stateless) ──enqueue──▶ Redis ──pu
                   GET /jobs/{id} ◀──result/status──┘            └─ pallet_packer solve
 ```
 
+## Connect an external front-end
+
+A front-end running in a **separate compose project** on the same Docker host can
+reach the API container-to-container — no host ports, no public round-trip. The
+`api` service joins a shared bridge network, **`pallet-packer-net`**, with the
+stable alias **`pallet-packer-api`**; redis and the workers stay on the private
+`default` network and are not reachable from the front-end.
+
+1. Bring this stack up first — it **creates** the shared network:
+   ```bash
+   docker compose up -d --build
+   ```
+2. In your front-end's compose file, declare the network as `external` and join
+   it (full copy-paste in [`examples/frontend-compose.example.yml`](examples/frontend-compose.example.yml)):
+   ```yaml
+   services:
+     frontend:
+       networks: [default, pallet-packer-net]
+       environment:
+         PALLET_API_BASE_URL: "http://pallet-packer-api:8000/api/v1"
+   networks:
+     default:
+     pallet-packer-net:
+       external: true      # created by the pallet API stack above
+   ```
+3. Your front-end's **server-side** code calls `http://pallet-packer-api:8000/api/v1/…`.
+
+> This is for **server-to-server** calls (SSR / a BFF / a proxy inside your
+> front-end container). A user's browser is not on the Docker network — for
+> direct browser calls, route them through your front-end's reverse proxy or the
+> public host port, and note the API ships **no CORS headers** (add a proxy or
+> CORS middleware if a browser must call it cross-origin).
+>
+> Bring the API stack down *after* the front-end (or `docker compose down`
+> harmlessly warns that `pallet-packer-net` still has active endpoints).
+
 ## Development
 
 The supported run path is Docker. For host-side work:
@@ -138,6 +174,7 @@ pallet_packer_api_service/
 ├── deploy/Dockerfile    multi-stage: build the vendored core, slim runtime
 ├── docker-compose.yml   redis + api + 4 workers (standalone)
 ├── docs/                planning + design + load profile
+├── examples/            front-end cross-stack networking example
 ├── scripts/             smoke + load-test harness
 └── tests/               two-tier pytest suite
 ```
