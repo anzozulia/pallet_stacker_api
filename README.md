@@ -67,10 +67,17 @@ curl -s localhost:8000/api/v1/jobs/<job_id>
 ```
 
 - Spatial dimensions are **positive integers** (any unit — mm/cm/inch — applied
-  consistently); weights may be fractional. Omit a cap (`max_weight`,
-  `max_load_on_top`) for *unlimited*. Up to **500 boxes** (configurable).
+  consistently); weights may be fractional (≤ 1e12, finite). Omit a cap
+  (`max_weight`, `max_load_on_top`) for *unlimited*. Up to **500 boxes** and
+  **10 MB** of body per request (both configurable).
 - Errors share one envelope: `{"error": {"code", "message"?, "problems"?}}`.
-  Schema violations → `422`; contract violations (duplicate id, over-cap) → `400`.
+  Schema violations → `422`; contract violations (duplicate id, over-cap) → `400`;
+  oversized body → `413`.
+- **Fragile + orientation-sensitive goods need both knobs:** `max_load_on_top: 0`
+  caps stacked *weight* only — add `rotations: "this_side_up"` to also stop the
+  box being tipped on its side.
+- Same input + same `seed` ⇒ identical plan. On highly symmetric loads (e.g.
+  all-identical boxes) *different* seeds may legitimately return identical plans.
 
 See [`docs/02_api_contract.md`](docs/02_api_contract.md) for the rationale; the
 OpenAPI schema at `/docs` is the authoritative contract.
@@ -84,6 +91,7 @@ All operational knobs are environment variables (12-factor); defaults shown. Cop
 |---|---|---|
 | `PALLET_API_REDIS_URL` | `redis://localhost:6379` | Redis (queue + result store) |
 | `PALLET_API_MAX_BOXES` | `500` | Box cap (over → `400`) |
+| `PALLET_API_MAX_BODY_BYTES` | `10485760` | Request-body byte cap (over → `413`) |
 | `PALLET_API_SOFT_BUDGET_S` | `90` | Solver time budget (caller `time_budget_s` ceiling) |
 | `PALLET_API_HARD_BUDGET_S` | `120` | Worker hard wall-clock kill (→ `timeout`) |
 | `PALLET_API_RATE_LIMIT_PER_MIN` | `30` | Per-IP requests per 60-second window |

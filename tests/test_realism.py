@@ -252,6 +252,41 @@ def test_realism_none_keeps_fitness_identical():
             == _fitness_pallet1(res, pallet, realism=None))
 
 
+def test_realism_weight_is_clamped_to_bounded_loss():
+    # Hardening plan A4: eps must never exceed 0.5*min_vol/cap, or dropping
+    # the smallest box becomes profitable and the bounded-loss guarantee is
+    # silently void. Weights above 1.0 clamp to 1.0.
+    pallet = Pallet(length=1200, width=800, height=1500)
+    boxes = [Box(id="BIG", length=600, width=400, height=400, weight=20.0),
+             Box(id="SMALL", length=100, width=100, height=100, weight=1.0)]
+    ctx1 = build_realism_context(boxes, pallet,
+                                 PackerConfig(realism_weight=1.0))
+    ctx4 = build_realism_context(boxes, pallet,
+                                 PackerConfig(realism_weight=4.0))
+    assert ctx4.eps == ctx1.eps                      # clamped
+    cap = 1200 * 800 * 1500
+    assert ctx4.eps <= 0.5 * (100 ** 3) / cap + 1e-18
+    # Bounded-loss property must hold even at the absurd weight.
+    full = _hand_result(boxes, pallet, [(1, Rotation.LWH, 0, 0, 0),
+                                        (0, Rotation.LWH, 0, 0, 1100)])
+    dropped = _hand_result(boxes[:1], pallet, [(0, Rotation.LWH, 0, 0, 0)])
+    dropped.unpacked = [boxes[1]]
+    assert (_fitness_pallet1(full, pallet, realism=ctx4)
+            < _fitness_pallet1(dropped, pallet, realism=ctx4))
+
+
+def test_duplicate_box_ids_disable_realism():
+    # C7/F9: the scalar path maps placements to rows BY ID, the batch path is
+    # positional — duplicates would silently desync the two objectives. The
+    # service gate enforces unique ids; un-gated library callers get the term
+    # disabled instead of corrupted.
+    pallet = Pallet(length=1200, width=800, height=1500)
+    boxes = [Box(id="X", length=300, width=200, height=150, weight=2.0),
+             Box(id="X", length=300, width=200, height=150, weight=2.0)]
+    assert build_realism_context(
+        boxes, pallet, PackerConfig(realism_weight=1.0)) is None
+
+
 def test_realism_weight_zero_disables_context():
     boxes, pallet = _instance(seed=6)
     assert build_realism_context(boxes, pallet, PackerConfig()) is None

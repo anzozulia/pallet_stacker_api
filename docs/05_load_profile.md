@@ -129,3 +129,12 @@ study. Reduce the worker count on smaller hosts (keep total worker-threads ≤ c
   production, a max-queue-depth `503` (D-follow-up) would shed load gracefully.
 - **Reproduce:** `LT_OMP=2 docker compose -f docker-compose.loadtest.yml up -d --build --scale worker=4`,
   then `python3 scripts/loadtest.py burst --jobs 24 --boxes 60 --budget 90 --label 4wx2t`.
+
+> **Post-hardening note (2026-07-02, plan 06 Phase B).** The Phase 6 numbers
+> above used a mixed-SKU catalogue. Homogeneous constrained loads (N identical
+> boxes + a finite `max_weight`) exposed an unbounded v2 warm-start (superlinear:
+> ~9 s at N=100 → ~175 s at N=400 — over the hard kill). The v2 seed is now
+> deadline-bounded to half the solve budget, so such requests complete within
+> the soft budget with a partial warm start instead of timing out. Regression
+> scenarios: `cap_500_identical_capped`, `dust_500_capped`, `budget_micro_200`
+> in `scripts/realism_scenarios.py`.

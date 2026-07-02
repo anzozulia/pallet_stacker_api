@@ -233,6 +233,31 @@ SCENARIOS = [
                     "pallet": HALF, "options": {"time_budget_s": 12, "seed": 123}},
     },
     {
+        "id": "cap_500_identical_capped",
+        "story": "F2 regression: 500 identical boxes with a finite weight cap "
+                 "used to run the v2 warm-start unbounded (~3 min) and always "
+                 "hit the 120s hard kill.",
+        "expect": "Completes with status done inside the soft budget.",
+        "payload": {"boxes": _boxes("B", 500, 200, 150, 100, 2.0),
+                    "pallet": EUR, "options": {"time_budget_s": 60}},
+    },
+    {
+        "id": "dust_500_capped",
+        "story": "F2 regression (degenerate variant): 500 dust boxes with a "
+                 "finite cap — realism auto-disables, the deadline must still hold.",
+        "expect": "Completes with status done inside the soft budget.",
+        "payload": {"boxes": _boxes("D", 500, 1, 1, 1, 0.001),
+                    "pallet": EUR, "options": {"time_budget_s": 30}},
+    },
+    {
+        "id": "budget_micro_200",
+        "story": "F2 regression: a 1s budget with 200 boxes used to take 21s "
+                 "because the v2 seed ignored the budget entirely.",
+        "expect": "Returns fast (v2 seed skipped when the slice is under 1s).",
+        "payload": {"boxes": _boxes("B", 200, 250, 200, 150, 2.0),
+                    "pallet": EUR, "options": {"time_budget_s": 1}},
+    },
+    {
         "id": "multi_pallet_groups",
         "story": "Two room-kits (8 kitchen boxes, 8 bathroom boxes) on up to 2 "
                  "pallets. Groups must stay together; each pallet packed sensibly.",

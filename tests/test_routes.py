@@ -99,6 +99,59 @@ def test_root_redirects_to_docs(client):
     assert r.headers["location"].endswith("/docs")
 
 
+def test_oversized_body_is_413_envelope(client, monkeypatch):
+    # C2/F6: honest Content-Length over the cap -> rejected before parsing.
+    monkeypatch.setattr(settings, "max_body_bytes", 1024)
+    r = client.post(f"{V1}/pack", content=b"x" * 2048,
+                    headers={"content-type": "application/json"})
+    assert r.status_code == 413
+    assert r.json()["error"]["code"] == "payload_too_large"
+
+
+def test_oversized_chunked_body_is_413(client, monkeypatch):
+    # No Content-Length (chunked): the middleware counts the received bytes.
+    monkeypatch.setattr(settings, "max_body_bytes", 1024)
+    r = client.post(f"{V1}/pack", content=iter([b"x" * 512] * 4),
+                    headers={"content-type": "application/json"})
+    assert r.status_code == 413
+    assert r.json()["error"]["code"] == "payload_too_large"
+
+
+def test_body_under_cap_still_parses(client, pack_payload, monkeypatch):
+    # The cap must not eat legitimate requests (the 422 proves the body
+    # reached pydantic intact).
+    monkeypatch.setattr(settings, "max_body_bytes", 1024)
+    r = client.post(f"{V1}/pack", json={"boxes": []})
+    assert r.status_code == 422
+
+
+def test_rate_limiter_redis_failure_is_503_envelope():
+    # C8/F13: a Redis error inside the limiter must surface as the same
+    # degraded 503 envelope as /pack's own queue path, not a bare 500.
+    import asyncio
+    import types
+
+    from fastapi import HTTPException
+    from redis.exceptions import RedisError
+
+    from pallet_api.api.limits import enforce_rate_limit
+
+    class _DeadRedis:
+        async def incr(self, key):
+            raise RedisError("connection refused")
+
+        async def expire(self, key, ttl):
+            raise RedisError("connection refused")
+
+    req = types.SimpleNamespace(
+        app=types.SimpleNamespace(state=types.SimpleNamespace(redis=_DeadRedis())),
+        client=types.SimpleNamespace(host="1.2.3.4"))
+    with pytest.raises(HTTPException) as ei:
+        asyncio.run(enforce_rate_limit(req))
+    assert ei.value.status_code == 503
+    assert ei.value.detail["error"]["code"] == "degraded"
+
+
 def test_rate_limit_returns_429(client, pack_payload, monkeypatch, flush_redis):
     # Low limit + a flushed db so the minute-window counter starts clean. Bad
     # payloads keep the test side-effect-free: the limiter (a dependency) runs

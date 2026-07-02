@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from pallet_api.config import settings
+from pallet_api.api.bodylimit import BodySizeLimitMiddleware
 from pallet_api.api.routes import router
 
 DESCRIPTION = """
@@ -44,12 +45,16 @@ A large solve can take up to the time budget (~90 s by default), so packing is a
 ### Constraints supported
 Weight cap, fragility (`max_load_on_top`), base **support ratio**, **group**
 co-location (same group → same pallet), `max_pallets`, and pallet `max_overhang`.
+Fragility caps stacked *weight* only — orientation-sensitive goods also need
+`rotations: "this_side_up"` to stay upright.
 
 ### Limits & guarantees
 - **Time budget:** ~90 s soft (the solver's own budget) with a hard ~120 s
   wall-clock kill at the worker → `timeout` (a runaway solve never pins a worker).
   Both are configurable defaults.
-- **Determinism:** same input + same `seed` ⇒ identical plan.
+- **Determinism:** same input + same `seed` ⇒ identical plan (on symmetric loads
+  different seeds may tie on the same plan — expected, not a bug).
+- **Body cap:** requests over 10 MB (configurable) → `413`.
 - **Rate limit:** per-IP, a fixed 60-second window — up to 30 requests/window by
   default (configurable); `429` over the limit.
 - **No accounts, no history:** results are ephemeral — fetchable for the result
@@ -79,7 +84,8 @@ async def lifespan(app: FastAPI):
         await app.state.redis.aclose()
 
 
-_CODE_BY_STATUS = {404: "not_found", 405: "method_not_allowed", 429: "rate_limited",
+_CODE_BY_STATUS = {404: "not_found", 405: "method_not_allowed",
+                   413: "payload_too_large", 429: "rate_limited",
                    500: "internal_error", 503: "degraded"}
 
 
@@ -122,6 +128,7 @@ def create_app() -> FastAPI:
     )
     app.add_exception_handler(StarletteHTTPException, _http_exc_handler)
     app.add_exception_handler(RequestValidationError, _validation_exc_handler)
+    app.add_middleware(BodySizeLimitMiddleware)
 
     @app.get("/", include_in_schema=False)
     async def _root():

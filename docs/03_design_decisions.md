@@ -50,6 +50,12 @@ solves** at OMP=2 — comfortably inside the 90 s budget, **0 timeouts**. So 500
 safe; no need to drop to 400. The exact number stays a config value (`MAX_BOXES`,
 D9). *Rejected:* the originally-discussed 5000 (the core does not complete at that
 size).
+*Amended (hardening plan F2, 2026-07-02):* the Phase 6 confirmation used a MIXED
+catalogue; a HOMOGENEOUS 500-box load with any finite constraint drove the v2
+warm-start unbounded (~3 min, always hard-killed). Fixed by giving the v2 seed a
+hard deadline of half the solve budget (`PalletPacker.pack(time_limit_s=...)`,
+partial packs still seed the BRKGA); the 500 cap now holds for homogeneous
+constrained loads too. See `docs/06_hardening_plan.md` Phase B.
 
 ### D6 — Time budget > 60 s, with a HARD worker-side timeout — **ACCEPTED**
 The per-solve budget is "much bigger than 60 s" (target ~90–120 s). The solver's
@@ -107,9 +113,14 @@ only module that imports the core, so the engine stays swappable.
 Default to a fixed service seed so identical input yields an identical plan
 (reproducible, debuggable). Allow an optional caller-supplied `seed`. *Why:* the
 core is bit-identical at a fixed seed and thread-invariant; exposing it is free and
-useful. *Implemented:* `options.seed` falls back to `DEFAULT_SEED` (adapter). *Open
-sub-question (not done):* whether to also cache results by input-hash to dedup
-identical resubmissions (a possible optimisation, not MVP).
+useful. *Implemented:* `options.seed` falls back to `DEFAULT_SEED` (adapter); the
+schema rejects negative seeds (`ge=0` — numpy's RNG raises on them, and that must
+be a `422`, not a `solver_error`). *Expectation to set (F14):* on highly symmetric
+loads (e.g. all-identical boxes) different seeds can legitimately return identical
+plans — every flat dense layout ties on volume AND realism; this is determinism
+working, not the seed being ignored. *Open sub-question (not done):* whether to
+also cache results by input-hash to dedup identical resubmissions (a possible
+optimisation, not MVP).
 
 ### D12 — Honest quality expectations — **ACCEPTED (informational)**
 The packings are physically valid but not world-class density: ~1.7 pp behind 2013
@@ -122,10 +133,14 @@ tool. See the core repo's `docs/reports/31`.
 Basic per-IP rate limit on `POST /pack` plus the box cap. *Why:* abuse protection
 without accounts. *Implemented:* a fixed-window per-minute counter in Redis
 (`api/limits.py`), limit from `RATE_LIMIT_PER_MIN` (D9); over-limit → `429`.
-*Known follow-up:* the client IP is taken from `request.client` only — behind a
-reverse proxy/LB it should honour `X-Forwarded-For` (a `trust_proxy` switch), else
-all forwarded clients share one bucket. *Rejected for MVP:* API keys / quotas
-(implies accounts); token-bucket (fixed-window is sufficient here).
+*Amended (hardening plan C8, 2026-07-02):* a Redis error inside the limiter used
+to escape as a bare `500` outside the error envelope; it now fails **closed** with
+the same `503 degraded` envelope as `/pack`'s own queue path (Redis being down
+means the queue is down anyway). *Known follow-up:* the client IP is taken from
+`request.client` only — behind a reverse proxy/LB it should honour
+`X-Forwarded-For` (a `trust_proxy` switch), else all forwarded clients share one
+bucket. *Rejected for MVP:* API keys / quotas (implies accounts); token-bucket
+(fixed-window is sufficient here).
 
 ### D14 — Realism layer: recenter + orientation alignment + realism fitness — **ACCEPTED (implemented)**
 A 19-scenario live study showed the solver's layouts were constraint-correct but
@@ -157,6 +172,43 @@ constraint (rejects placements, can't centre a layout, misfires on
 unlimited-weight pallets); per-box centering in the decoders (corner anchoring
 is what makes EMS packing dense). *Deferred:* decoder-level rotation tie-breaks
 and brick-bond interlock (Cython twin fan-out + BR re-validation risk).
+*Amended (hardening plan A/C, 2026-07-02, after an adversarial evaluation —
+see `docs/06_hardening_plan.md`):* (1) the align pass now SKIPS any box that
+supports another entirely — the old gate only blocked dz changes, and a yaw
+swap could pull the footprint out from under a dependent; (2) the post-pass
+safety net `validate()` was hardened to the engine's feasibility stack
+(per-box `requires_full_support`, centroid-over-supporter, no zero-contact
+floaters, explicit CoG ranges; load bearing stays DIRECT-supporter on purpose
+— the BRKGA decoders' commit model is direct-only, F15); (3) `realism_weight`
+is clamped to [0,1] so the bounded-loss guarantee cannot be voided; (4)
+recentring is skipped when the caller sets explicit `cog_x_range`/`cog_y_range`
+(the envelope owner decides placement; the centred fractional envelope needs no
+guard — a shift toward centre can only move the CoG deeper into it); (5) the
+align time-box is one GLOBAL 4 s budget shared across pallets instead of
+2 s/pallet; (6) duplicate box ids disable the realism term (the scalar path is
+id-keyed, the batch path positional — a desync would corrupt the search).
+
+### D15 — Boundary hardening: schema bounds + body cap + sentinel guard — **ACCEPTED (implemented)**
+An adversarial evaluation (`docs/06_hardening_plan.md`) showed the boundary
+accepted well-typed but hostile values: 100 KB box ids round-tripped the whole
+pipeline (a 500-box × 100 KB-id body is ~50 MB with several-hundred-MB transient
+RAM amplification), `weight: Infinity` passed `ge=0`, `max_overhang: 5000` let a
+box sit fully off the deck while staying contract-"valid", and box weights
+≥ 1e18 aliased the decoders' finite `_NO_LIMIT` sentinel — silently unpackable
+even on an unlimited pallet. *Implemented:* (a) schema bounds — `id`/`group`
+≤ 128 chars, weight-like fields ≤ 1e12 with `allow_inf_nan=False`,
+`max_overhang ≤ min(pallet.length, pallet.width)`, `max_pallets ≤ 100`; (b) a
+pure-ASGI **request-body cap** (`api/bodylimit.py`, `MAX_BODY_BYTES`, default
+10 MB) returning the enveloped `413 payload_too_large` — an honest
+`Content-Length` is rejected before the body is read, a missing/lying header is
+caught by counting received bytes (the counting path must raise starlette's
+`HTTPException`, which FastAPI re-raises untouched, where a custom exception
+would be remapped to a bare 400); (c) the CORE gate rejects `weight ≥ 1e15`
+(500 × 1e15 stays under the 1e18 sentinel) so un-schema'd library callers are
+covered too; (d) `group: ""`/whitespace normalises to *no group* in the adapter
+(it previously co-located every empty-group box onto ONE pallet). *Rejected:*
+raising the id cap (nothing legitimate needs >128); bounding overhang at the
+schema only (library callers would still hit the sentinel).
 
 ---
 
@@ -176,4 +228,5 @@ What remains are optional / follow-up items only:
 | Result caching by input-hash (D11) | optional, post-MVP | not implemented |
 | `X-Forwarded-For` / `trust_proxy` for rate limiting (D13) | follow-up hardening | uses `request.client` only |
 | Queue-saturation `503` (shed load at max queue depth) | follow-up hardening | not implemented (queue just grows e2e latency) |
-| Automated test suite | pre-launch | `tests/` still empty |
+| Decoder-level rotation tie-break (D14 TIPPED residual) | deferred (Numba+Cython twins + BR re-validation) | 3/22 battery scenarios flag it |
+| ~~Automated test suite~~ | done | two-tier suite, 93 tests (`tests/README.md`) |

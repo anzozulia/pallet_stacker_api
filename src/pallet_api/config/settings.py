@@ -28,6 +28,10 @@ class Settings:
 
     # --- input limits (the boundary contract) ---
     max_boxes: int = _i("PALLET_API_MAX_BOXES", 500)
+    # Request-body byte cap (413 over it). A legitimate 500-box request is a
+    # few hundred KB; the cap bounds the RAM amplification of hostile bodies
+    # across uvicorn/pydantic/Redis/pickle (hardening plan C2/F6).
+    max_body_bytes: int = _i("PALLET_API_MAX_BODY_BYTES", 10 * 1024 * 1024)
 
     # --- time budgets (seconds) ---
     # soft = the solver's own time_limit_s ceiling (clamps caller requests).

@@ -70,6 +70,34 @@ def test_recenter_weighted_cog_targets_deck_center():
     assert abs(cog_x - 600.0) < 1.0                    # centred within the grid
 
 
+def test_recenter_skipped_when_caller_owns_cog_envelope():
+    # C5/F7: an explicit (possibly off-centre) CoG range is the caller's
+    # placement decision; recentring to the deck centre could violate it and
+    # the fractional-envelope argument does not apply to explicit ranges.
+    cfg = _cfg()
+    pallet = Pallet(length=1200, width=800, height=1500,
+                    max_weight=float("inf"), cog_x_range=(0.0, 300.0))
+    b = Box(id="A", length=600, width=400, height=400, weight=25.0)
+    st = _state(pallet, cfg, [(b, Rotation.LWH, 0.0, 0.0, 0.0)])
+    assert recenter_pass(st, pallet, cfg) == (0.0, 0.0)
+    assert (st.placements[0].x, st.placements[0].y) == (0.0, 0.0)
+
+
+def test_apply_postprocess_global_budget_skips_align_keeps_recenter():
+    # C6/F8: with the shared budget spent, align is skipped (the yaw mix
+    # stays) but the O(N) recenter still runs.
+    cfg = _cfg()
+    a = Box(id="A", length=300, width=200, height=100, weight=5.0)
+    b = Box(id="B", length=300, width=200, height=100, weight=5.0)
+    st = _state(PALLET, cfg, [(a, Rotation.LWH, 0.0, 0.0, 0.0),
+                              (b, Rotation.WLH, 300.0, 0.0, 0.0)])
+    res = apply_postprocess(PackResult(pallets=[st], unpacked=[]),
+                            PALLET, cfg, time_budget_s=0.0)
+    ps = res.pallets[0].placements
+    assert len({(round(p.dims[0]), round(p.dims[1])) for p in ps}) == 2
+    assert min(p.x for p in ps) > 0.0                  # recentred anyway
+
+
 def test_recenter_idempotent_and_z_untouched():
     cfg = _cfg()
     b = Box(id="A", length=300, width=300, height=300, weight=5.0)

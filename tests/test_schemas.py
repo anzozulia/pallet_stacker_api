@@ -36,6 +36,47 @@ def test_options_reject_out_of_range_values():
         OptionsIn(support_ratio=2.0)                         # le=1
     with pytest.raises(ValidationError):
         OptionsIn(max_pallets=0)                             # ge=1
+    with pytest.raises(ValidationError):
+        OptionsIn(seed=-5)                                   # ge=0 (F4: numpy
+    # rejects negative seeds; must be a schema 422, not a solver_error)
+    assert OptionsIn(seed=0).seed == 0                       # zero stays legal
+
+
+def test_boxin_bounds_reject_abuse_vectors():
+    # Hardening plan C1 (F5/F6/F12): well-typed but hostile values.
+    box = dict(id="B1", length=1, width=1, height=1)
+    with pytest.raises(ValidationError):
+        BoxIn(**{**box, "id": "x" * 129})                  # id length cap
+    with pytest.raises(ValidationError):
+        BoxIn(**{**box, "id": ""})                         # empty id
+    with pytest.raises(ValidationError):
+        BoxIn(**box, group="g" * 129)                      # group length cap
+    with pytest.raises(ValidationError):
+        BoxIn(**box, weight=1e13)                          # above 1e12
+    with pytest.raises(ValidationError):
+        BoxIn(**box, weight=float("inf"))                  # F12: inf passed ge=0
+    with pytest.raises(ValidationError):
+        BoxIn(**box, max_load_on_top=float("inf"))
+    b = BoxIn(**box, weight=1e12, group="g" * 128)         # at the bounds: legal
+    assert b.weight == 1e12
+
+
+def test_palletin_bounds():
+    p = dict(length=1200, width=800, height=1500)
+    with pytest.raises(ValidationError):
+        PalletIn(**p, max_weight=float("inf"))
+    with pytest.raises(ValidationError):
+        # F11: an overhang wider than the deck lets a box sit fully off it.
+        PalletIn(**p, max_overhang=801)
+    assert PalletIn(**p, max_overhang=800).max_overhang == 800
+
+
+def test_options_bounds():
+    with pytest.raises(ValidationError):
+        OptionsIn(max_pallets=101)                         # C1 cap
+    assert OptionsIn(max_pallets=100).max_pallets == 100
+    with pytest.raises(ValidationError):
+        OptionsIn(time_budget_s=float("inf"))
 
 
 def test_packrequest_requires_at_least_one_box():

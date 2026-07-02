@@ -18,13 +18,18 @@ _ROT = {"all": ALL_ROTATIONS, "this_side_up": THIS_SIDE_UP, "none": NO_ROTATION}
 
 def _box(d: Dict[str, Any]) -> Box:
     mlot = d.get("max_load_on_top")
+    group = d.get("group")
+    if isinstance(group, str) and not group.strip():
+        # ""/whitespace-only means "no group" — passing it through would
+        # co-locate every such box onto ONE pallet as a real group (F10).
+        group = None
     return Box(
         id=str(d["id"]),
         length=d["length"], width=d["width"], height=d["height"],
         weight=float(d.get("weight") or 0.0),
         max_load_on_top=(math.inf if mlot is None else float(mlot)),
         allowed_rotations=list(_ROT.get(d.get("rotations", "all"), ALL_ROTATIONS)),
-        group=d.get("group"),
+        group=group,
         requires_full_support=bool(d.get("requires_full_support", False)),
     )
 

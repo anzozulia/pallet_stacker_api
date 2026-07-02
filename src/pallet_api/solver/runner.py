@@ -34,9 +34,11 @@ def run_with_hard_timeout(payload: Dict[str, Any], cfg: Dict[str, Any],
         kind, val = q.get(timeout=hard_timeout_s)
     except _queue.Empty:
         if p.is_alive():
-            p.terminate(); p.join(3)
+            p.terminate()
+            p.join(3)
             if p.is_alive():
-                p.kill(); p.join(2)
+                p.kill()
+                p.join(2)
             return {"status": "timeout", "error": {
                 "code": "solve_timeout",
                 "message": f"Exceeded the {hard_timeout_s:g}s wall-clock limit."}}

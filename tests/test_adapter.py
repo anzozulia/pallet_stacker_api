@@ -54,6 +54,27 @@ def test_build_inputs_field_mapping():
     assert math.isinf(pallet.max_weight)               # None -> unlimited
 
 
+def test_group_blank_is_normalised_to_none():
+    # C3/F10: "" is falsy-but-not-None; passing it through would co-locate
+    # every empty-group box onto ONE pallet as a real group.
+    base = {"id": "B1", "length": 10, "width": 10, "height": 10}
+    assert adapter._box({**base, "group": ""}).group is None
+    assert adapter._box({**base, "group": "   "}).group is None
+    assert adapter._box({**base, "group": "CUST1"}).group == "CUST1"
+
+
+def test_core_gate_rejects_weight_near_no_limit_sentinel():
+    # C4/F5: weights >= 1e18 alias the decoders' _NO_LIMIT sentinel and become
+    # silently unpackable; the gate rejects >= 1e15 (500 x 1e15 stays < 1e18).
+    body = {"boxes": [{"id": "B1", "length": 10, "width": 10, "height": 10,
+                       "weight": 1e15}],
+            "pallet": {"length": 100, "width": 100, "height": 100}}
+    with pytest.raises(PackingInputError, match="supported range"):
+        adapter.validate_request(body, max_boxes=500)
+    body["boxes"][0]["weight"] = 1e14                # under the bound: fine
+    adapter.validate_request(body, max_boxes=500)
+
+
 def test_config_overhang_flag():
     p = {"length": 100, "width": 100, "height": 100}
     c0 = adapter._config({"pallet": {**p, "max_overhang": 0}, "options": {}})

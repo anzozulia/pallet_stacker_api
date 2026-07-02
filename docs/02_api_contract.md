@@ -17,9 +17,12 @@ endpoints are under `/api/v1`. Content type `application/json`. No auth.
 > (`queued`→`running`→`done`/`failed`/`timeout`, `404` when expired), `GET /health`,
 > `GET /version` (`{service, core, api}`). **Deviations to know:** the `meta` block
 > shown below is **reserved and not yet populated** (clients must not depend on it
-> in v1); over-cap requests currently surface through the gate as `400 invalid_input`
-> (a `problems` entry), **not** a distinct `413`; and the `503` queue-saturation
-> response is **not implemented yet**. Validation is split: schema violations
+> in v1); over-cap requests (too many BOXES) surface through the gate as
+> `400 invalid_input` (a `problems` entry) — the `413` is reserved for request
+> BODIES over the byte cap (default 10 MB, `payload_too_large`); and the `503`
+> queue-saturation response is **not implemented yet** (a Redis outage does
+> return the `503 degraded` envelope, from `/pack`, `/jobs`, and the rate
+> limiter alike). Validation is split: schema violations
 > (wrong type, **non-integer dimension**, out-of-bounds) return `422
 > validation_error`; only duplicate ids and over-cap return `400 invalid_input`. Also: **unlimited caps** (a `pallet.max_weight`
 > or box `max_load_on_top` omitted or `null`) are **omitted** from the result —
@@ -51,14 +54,15 @@ creates a job and returns immediately — it does **not** solve inline.
 {
   "boxes": [
     {
-      "id": "B0001",          // required, unique string (used to map results)
+      "id": "B0001",          // required, unique string, 1-128 chars (maps results)
       "length": 300,           // required, POSITIVE INTEGER (any unit, consistent)
       "width": 200,            // required, POSITIVE INTEGER
       "height": 150,           // required, POSITIVE INTEGER
-      "weight": 2.5,           // optional float >= 0 (default 0)
-      "max_load_on_top": 20.0, // optional float >= 0 or null=unlimited (fragile = 0)
+      "weight": 2.5,           // optional float in [0, 1e12] (default 0; finite)
+      "max_load_on_top": 20.0, // optional float in [0, 1e12] or null=unlimited (fragile = 0)
       "rotations": "this_side_up", // "all" | "this_side_up" | "none" (default "all")
-      "group": "CUST1",        // optional; same group -> same pallet
+      "group": "CUST1",        // optional, <=128 chars; same group -> same pallet
+                               //   (""/whitespace = no group)
       "requires_full_support": false // optional
     }
     // ... up to 500 boxes
@@ -67,14 +71,14 @@ creates a job and returns immediately — it does **not** solve inline.
     "length": 1200,            // POSITIVE INTEGER
     "width": 1000,             // POSITIVE INTEGER
     "height": 1500,            // POSITIVE INTEGER
-    "max_weight": 900,         // optional float > 0 or null=unlimited
-    "max_overhang": 0          // optional non-negative INTEGER (default 0)
+    "max_weight": 900,         // optional float in (0, 1e12] or null=unlimited
+    "max_overhang": 0          // optional non-negative INTEGER, <= min(length, width)
   },
   "options": {
-    "max_pallets": 10,         // optional int >= 1 (default 1 = single-container)
+    "max_pallets": 10,         // optional int 1..100 (default 1 = single-container)
     "time_budget_s": 90,       // optional; clamped to [min, service_max]
     "support_ratio": 0.8,      // optional [0,1] (default 0.8 = stability enforced)
-    "seed": 42                 // optional int (omit -> service default, reproducible)
+    "seed": 42                 // optional int >= 0 (omit -> service default, reproducible)
   }
 }
 ```
@@ -82,6 +86,16 @@ creates a job and returns immediately — it does **not** solve inline.
 **Spatial dimensions must be integers** (any unit — mm, cm, inch — applied
 consistently). Weights/loads may be fractional. These rules are the core's input
 gate; violations are rejected here, not silently coerced.
+
+**Modeling fragile, orientation-sensitive goods:** `max_load_on_top` caps the
+stacked **weight** only — it does not stop the solver tipping the box on its
+side to fit a gap. Goods that must also stay upright (glassware, "this way up"
+cartons) need **both** `max_load_on_top: 0` **and** `rotations: "this_side_up"`.
+
+**Seed determinism nuance:** same input + same `seed` ⇒ identical plan, always.
+The converse is not promised — on highly symmetric loads (e.g. all-identical
+boxes) *different* seeds can legitimately return identical plans, because every
+dense flat layout ties on both volume and the realism terms.
 
 ### Responses
 
@@ -108,12 +122,16 @@ gate; violations are rejected here, not silently coerced.
 }
 ```
 
-`413 Payload Too Large` — over the box cap:
+`413 Payload Too Large` — request **body** over the byte cap (default 10 MB,
+`PALLET_API_MAX_BODY_BYTES`; a legitimate max-size request is a few hundred KB).
+Too many *boxes* is a `400` from the gate, not a `413`:
 ```json
-{ "error": { "code": "too_many_boxes", "message": "601 boxes exceeds the limit of 500." } }
+{ "error": { "code": "payload_too_large", "message": "Request body exceeds the 10 MB limit." } }
 ```
 
-`429 Too Many Requests` — rate limited (per-IP). `503` — queue saturated.
+`429 Too Many Requests` — rate limited (per-IP). `503 degraded` — Redis (queue /
+result store) unreachable; returned by `/pack`, `/jobs/{id}`, and the rate
+limiter alike.
 
 ---
 

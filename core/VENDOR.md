@@ -17,8 +17,16 @@ builds the core (Cython extensions) into the image with no external dependency.
   (`_brkga_core/realism.py`), a gated heavy-first seed, and a realism
   tie-break in the v2 candidate set — all default OFF in the core (the
   service enables them; see ADR D14 and upstream `docs/reports/34`).
-  Flag-OFF default behavior verified bit-identical pre/post. Kept in sync
-  with upstream.
+  Flag-OFF default behavior verified bit-identical pre/post. Plus the
+  hardening pass (upstream `4f817bc`, 2026-07-02): align-pass dependents
+  skip + `validate()` raised to engine feasibility parity,
+  `PalletPacker.pack(time_limit_s=...)` deadline + budget-aware v2 seeding
+  (fixes the homogeneous-constrained capacity cliff), clamped
+  `realism_weight`, a `weight ≥ 1e15` gate guard (the 1e18 `_NO_LIMIT`
+  sentinel), recenter/CoG-envelope interaction, a global post-pass budget,
+  and duplicate-id realism defense — see ADRs D14/D15 and upstream
+  `docs/reports/35`. Flag-OFF golden and BR smoke re-verified
+  bit-identical. Kept in sync with upstream.
 - **Contents:** source only — the `pallet_packer/` package (`.py` + Cython
   `.pyx`/`.pxd`) plus its build files (`setup.py`, `pyproject.toml`). No built
   artifacts (`.so`/`.c`/`.html`/numba caches) are committed; the Docker build

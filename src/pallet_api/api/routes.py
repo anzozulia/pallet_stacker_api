@@ -57,6 +57,9 @@ _RESP_503 = _resp(ErrorEnvelope, "Redis (queue + result store) is unreachable; t
 _RESP_429 = _resp(ErrorEnvelope, "Per-IP rate limit exceeded (a fixed 60-second window; "
                   "default 30 requests, configurable). Retry in the next window.",
                   _err("rate_limited", "Rate limit of 30 requests/min exceeded.", None))
+_RESP_413 = _resp(ErrorEnvelope, "Request body exceeds the byte cap (default 10 MB, "
+                  "configurable). A legitimate max-size request is a few hundred KB.",
+                  _err("payload_too_large", "Request body exceeds the 10 MB limit.", None))
 _RESP_404 = _resp(ErrorEnvelope, "Unknown or expired job id (results are ephemeral — "
                   "no history).", _err("not_found", "unknown or expired job_id", None))
 
@@ -86,7 +89,8 @@ async def version():
              dependencies=[Depends(enforce_rate_limit)],
              summary="Submit a packing job",
              response_description="Job accepted and queued; poll `links.self`.",
-             responses={400: _RESP_400, 422: _RESP_422, 429: _RESP_429, 503: _RESP_503},
+             responses={400: _RESP_400, 413: _RESP_413, 422: _RESP_422,
+                        429: _RESP_429, 503: _RESP_503},
              description="""
 Validate a packing request and **enqueue** it — returns `202` with a `job_id`
 immediately. It does **not** solve inline (large solves can take up to the time
