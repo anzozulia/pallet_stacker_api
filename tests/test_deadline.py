@@ -34,6 +34,18 @@ def test_pack_deadline_bounds_runtime_and_conserves_boxes():
     assert placed > 0                                  # partial pack is real
 
 
+def test_pack_time_limit_zero_means_expired_not_unbounded():
+    # A3-2: time_limit_s=0 used to fall through the falsy check into the
+    # unbounded path; it must mean "deadline already passed" — prompt return
+    # with conservation intact.
+    t0 = time.monotonic()
+    res = PalletPacker(PALLET, PackerConfig(max_pallets=1)).pack(
+        _boxes(60), time_limit_s=0.0)
+    assert time.monotonic() - t0 < 10.0
+    placed = sum(len(st.placements) for st in res.pallets)
+    assert placed + len(res.unpacked) == 60
+
+
 def test_pack_default_is_unbounded_small_instance():
     # time_limit_s=None keeps the historical behavior (golden covers
     # bit-identity; this just pins the API contract).

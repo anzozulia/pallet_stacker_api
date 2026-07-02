@@ -97,16 +97,20 @@ def _decode_kwargs(boxes, pallet, config, n_modes=6):
     return arrays, kw
 
 
+@pytest.mark.parametrize("transitive", [True, False])
 @pytest.mark.parametrize("constrained", [True, False])
 @pytest.mark.parametrize("with_realism", [True, False])
-def test_scalar_batch_parity(constrained, with_realism):
+def test_scalar_batch_parity(constrained, with_realism, transitive):
     boxes, pallet = _instance(seed=11 if constrained else 12,
                               constrained=constrained)
     config = PackerConfig(
         support_ratio=0.8 if constrained else 0.0,
         require_centroid_supported=constrained,
         cog_envelope_fraction=1.0, cog_check_min_load_fraction=1.0,
-        realism_weight=1.0 if with_realism else 0.0)
+        realism_weight=1.0 if with_realism else 0.0,
+        # Round 2 (F19): the batch entries own separate transitive scratch
+        # allocation; parity must hold with the flag on too.
+        transitive_load_bearing=transitive)
     arrays, kw = _decode_kwargs(boxes, pallet, config)
     ctx = build_realism_context(
         boxes, pallet, config, dims_all=arrays["dims_all"],

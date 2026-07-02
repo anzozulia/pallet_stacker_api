@@ -125,6 +125,55 @@ def test_body_under_cap_still_parses(client, pack_payload, monkeypatch):
     assert r.status_code == 422
 
 
+def test_result_ttl_race_is_404_not_solver_failed(client, monkeypatch):
+    # A3-4: status() saw the result key, then it TTL-expired before
+    # result() could read it — that's an expired job (404), not a failure.
+    import asyncio as _asyncio
+
+    from arq.jobs import JobStatus
+
+    from pallet_api.api import routes
+
+    class _RacyJob:
+        def __init__(self, job_id, redis):
+            pass
+
+        async def status(self):
+            return JobStatus.complete
+
+        async def result(self, timeout=None):
+            raise _asyncio.TimeoutError()
+
+    monkeypatch.setattr(routes, "Job", _RacyJob)
+    r = client.get(f"{V1}/jobs/raced-away")
+    assert r.status_code == 404
+    assert r.json()["error"]["code"] == "not_found"
+
+
+def test_stored_task_exception_is_solver_failed(client, monkeypatch):
+    # The stored-exception path must stay a 200 failed/solver_failed.
+    from arq.jobs import JobStatus
+
+    from pallet_api.api import routes
+
+    class _BoomJob:
+        def __init__(self, job_id, redis):
+            pass
+
+        async def status(self):
+            return JobStatus.complete
+
+        async def result(self, timeout=None):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(routes, "Job", _BoomJob)
+    r = client.get(f"{V1}/jobs/boomed")
+    assert r.status_code == 200
+    j = r.json()
+    assert j["status"] == "failed"
+    assert j["error"]["code"] == "solver_failed"
+
+
 def test_rate_limiter_redis_failure_is_503_envelope():
     # C8/F13: a Redis error inside the limiter must surface as the same
     # degraded 503 envelope as /pack's own queue path, not a bare 500.

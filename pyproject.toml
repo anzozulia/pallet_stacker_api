@@ -13,7 +13,9 @@ version = "0.1.0"
 description = "Async HTTP microservice wrapping the pallet_packer BRKGA algorithm"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi>=0.110",      # async HTTP API
+    "fastapi>=0.115",      # async HTTP API; the body-cap 413 relies on the
+                           # body-read wrapper re-raising HTTPException
+                           # (api/bodylimit.py) — keep the floor modern
     "uvicorn[standard]>=0.29",  # ASGI server
     "arq>=0.26",           # Redis-backed async job queue + workers
     "redis>=5,<6",         # client

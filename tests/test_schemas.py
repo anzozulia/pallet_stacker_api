@@ -61,6 +61,29 @@ def test_boxin_bounds_reject_abuse_vectors():
     assert b.weight == 1e12
 
 
+def test_dims_are_bounded_at_1e6():
+    # Hardening round 2 A3-1 (F16): unbounded dims silently overflow the
+    # core's int64 hot-path products (areas, volumes).
+    with pytest.raises(ValidationError):
+        BoxIn(id="B1", length=1_000_001, width=1, height=1)
+    b = BoxIn(id="B1", length=1_000_000, width=1_000_000, height=1_000_000)
+    assert b.length == 1_000_000
+    with pytest.raises(ValidationError):
+        PalletIn(length=1_000_001, width=800, height=1500)
+    with pytest.raises(ValidationError):
+        BoxIn(id="B1", length=2**63, width=1, height=1)   # OverflowError class
+
+
+def test_options_null_means_defaults():
+    # A3-6: "options": null and omission are equivalent.
+    req = PackRequest(
+        boxes=[BoxIn(id="B1", length=300, width=200, height=150)],
+        pallet=PalletIn(length=1200, width=1000, height=1500),
+        options=None)
+    assert req.options is not None
+    assert req.options.max_pallets == 1
+
+
 def test_palletin_bounds():
     p = dict(length=1200, width=800, height=1500)
     with pytest.raises(ValidationError):

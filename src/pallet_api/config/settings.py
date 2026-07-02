@@ -56,6 +56,11 @@ class Settings:
     recenter: bool = _b("PALLET_API_RECENTER", True)
     align_orientations: bool = _b("PALLET_API_ALIGN_ORIENTATIONS", True)
     realism_weight: float = _f("PALLET_API_REALISM_WEIGHT", 1.0)
+    # Transitive load bearing (hardening round 2, F19): each box's weight
+    # propagates down the whole support chain against max_load_on_top —
+    # physically correct; stacked fragile loads pack fewer boxes than the
+    # historical direct-only model. Kill-switch for the old behavior.
+    transitive_load: bool = _b("PALLET_API_TRANSITIVE_LOAD", True)
 
     # --- abuse protection ---
     rate_limit_per_min: int = _i("PALLET_API_RATE_LIMIT_PER_MIN", 30)
@@ -80,6 +85,7 @@ class Settings:
             "recenter": self.recenter,
             "align_orientations": self.align_orientations,
             "realism_weight": self.realism_weight,
+            "transitive_load": self.transitive_load,
         }
 
 

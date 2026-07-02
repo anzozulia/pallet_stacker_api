@@ -55,14 +55,17 @@ creates a job and returns immediately — it does **not** solve inline.
   "boxes": [
     {
       "id": "B0001",          // required, unique string, 1-128 chars (maps results)
-      "length": 300,           // required, POSITIVE INTEGER (any unit, consistent)
-      "width": 200,            // required, POSITIVE INTEGER
-      "height": 150,           // required, POSITIVE INTEGER
+      "length": 300,           // required, POSITIVE INTEGER <= 1e6 (any unit, consistent)
+      "width": 200,            // required, POSITIVE INTEGER <= 1e6
+      "height": 150,           // required, POSITIVE INTEGER <= 1e6
       "weight": 2.5,           // optional float in [0, 1e12] (default 0; finite)
       "max_load_on_top": 20.0, // optional float in [0, 1e12] or null=unlimited (fragile = 0)
       "rotations": "this_side_up", // "all" | "this_side_up" | "none" (default "all")
       "group": "CUST1",        // optional, <=128 chars; same group -> same pallet
-                               //   (""/whitespace = no group)
+                               //   (""/whitespace = no group). A group larger
+                               //   than one pallet is NEVER split: the
+                               //   remainder is returned unpacked even when
+                               //   more pallets are allowed.
       "requires_full_support": false // optional
     }
     // ... up to 500 boxes

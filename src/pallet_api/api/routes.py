@@ -3,6 +3,7 @@
 `/docs` and the OpenAPI schema are a complete, self-service reference."""
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from arq.jobs import Job, JobStatus
@@ -171,7 +172,13 @@ async def job_state(
     # complete — the task returned a status dict
     try:
         outcome = await j.result(timeout=2)
-    except Exception as e:  # noqa: BLE001 — task raised / arq-level timeout
+    except asyncio.TimeoutError:
+        # status() saw the result key but it expired before result() read it
+        # (the TTL race, hardening round 2 A3-4) — same contract as any
+        # expired job, NOT a solver failure.
+        raise HTTPException(status_code=404,
+                            detail=_err("not_found", "unknown or expired job_id"))
+    except Exception as e:  # noqa: BLE001 — the stored task exception
         return {"job_id": job_id, "status": "failed",
                 "error": {"code": "solver_failed", "message": str(e)[:300]}}
     resp = {"job_id": job_id, "status": outcome.get("status", "failed")}

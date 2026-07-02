@@ -209,6 +209,44 @@ covered too; (d) `group: ""`/whitespace normalises to *no group* in the adapter
 (it previously co-located every empty-group box onto ONE pallet). *Rejected:*
 raising the id cap (nothing legitimate needs >128); bounding overhang at the
 schema only (library callers would still hit the sentinel).
+*Amended (round 2, 2026-07-03):* spatial dims are now bounded at **1e6**
+(schema `le` + core gate `MAX_DIM`) — unbounded dims silently wrapped the
+core's int64 hot-path products: garbage support/load checks from ~3e9 (invalid
+plans served `done`), corrupt batch fitness from ~2.1e6, raw `OverflowError`
+at 2⁶³. With dims ≤ 1e6 every area/volume/sum provably fits int64. 1e6 units
+≈ 1 km in mm; pick a smaller unit if exceeded.
+
+### D16 — Physical load model: transitive load bearing + floor deck rule — **ACCEPTED (implemented)**
+Round-2 adversarial evaluation (docs/07_hardening_round2.md) showed two
+physical holes shared by BOTH engines: (1) load bearing was enforced against
+DIRECT supporters only — a 10-stack of individually-legal links left the
+bottom box carrying **8.6×** its `max_load_on_top` (F19); the v2 engine's
+"transitive" commit never rejected fresh columns either, because its check
+was direct-only; (2) floor placements were unconditionally "supported", so
+with overhang active boxes were placed **fully off the deck, floating in
+air** (F17; live probe: 6/12 boxes at 0% deck contact). *Implemented:*
+(a) `PackerConfig.transitive_load_bearing` (default OFF = historical; the
+service enables via `PALLET_API_TRANSITIVE_LOAD`, default 1): the BRKGA JIT
+commit gains a transitive sibling AND a transitive dry-run **check** (the
+check must walk the chain — check-direct/commit-transitive alone never cuts a
+fresh column), mirrored in the v2 engine's `_load_bearing_ok` and in
+`validate()`; scalar/batch parity holds with the flag on (tests). Verified:
+the 10-stack now packs only what physics allows (max transitive load ratio
+0.95 vs 8.57 before). (b) Floor deck rule, NOT flag-gated (inert when
+overhang is off): a z=0 placement must have deck-contact ≥ the effective
+support ratio — enforced in the JIT check (raw deck dims passed only under
+overhang, sentinel 0 = legacy machine path), the decoders' new-bin bypasses,
+v2 `feasible`, and `validate()`. (c) The service forces the v2 warm-start for
+instances ≤ 60 boxes (`use_v2_seed=True` in the adapter) — v2's layer builder
+tiles exact-fit instances the greedy rotation argmax deterministically broke
+(2×2×2 packed 7/8 on every seed; now 8/8). *Consequence:* stacked fragile
+loads pack FEWER boxes than before — physically correct; kill-switch env for
+the old behavior. *Verified:* extended backend-equivalence sweep (2670
+comparisons, 0 mismatches, both new branches proven fired), BR smoke
+bit-identical, flags-off golden bit-identical. *Deferred (explicit NO-GO this
+round):* decoder rotation-score shaping (the F18 root fix) — requires another
+twin campaign; the v2-seed mitigation covers the measured case and the TIPPED
+residual stays documented.
 
 ---
 

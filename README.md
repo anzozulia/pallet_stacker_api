@@ -66,10 +66,14 @@ curl -s localhost:8000/api/v1/pack -H 'content-type: application/json' -d '{
 curl -s localhost:8000/api/v1/jobs/<job_id>
 ```
 
-- Spatial dimensions are **positive integers** (any unit — mm/cm/inch — applied
-  consistently); weights may be fractional (≤ 1e12, finite). Omit a cap
-  (`max_weight`, `max_load_on_top`) for *unlimited*. Up to **500 boxes** and
-  **10 MB** of body per request (both configurable).
+- Spatial dimensions are **positive integers ≤ 1e6** (any unit — mm/cm/inch —
+  applied consistently; 1e6 ≈ 1 km in mm); weights may be fractional (≤ 1e12,
+  finite). Omit a cap (`max_weight`, `max_load_on_top`) for *unlimited*. Up to
+  **500 boxes** and **10 MB** of body per request (both configurable).
+- **Physical load model:** box weights propagate down the whole stack against
+  `max_load_on_top` (transitive), and boxes always rest on the deck even with
+  `max_overhang` — stacked fragile loads pack fewer boxes than a naive
+  direct-only model would suggest.
 - Errors share one envelope: `{"error": {"code", "message"?, "problems"?}}`.
   Schema violations → `422`; contract violations (duplicate id, over-cap) → `400`;
   oversized body → `413`.
@@ -101,6 +105,7 @@ All operational knobs are environment variables (12-factor); defaults shown. Cop
 | `PALLET_API_RECENTER` | `1` | Centre the finished load on the deck (D14) |
 | `PALLET_API_ALIGN_ORIENTATIONS` | `1` | Unify same-SKU rotations per layer (D14) |
 | `PALLET_API_REALISM_WEIGHT` | `1.0` | Heavy-low/anti-tower fitness term; `0` = off (D14) |
+| `PALLET_API_TRANSITIVE_LOAD` | `1` | Weights propagate down the whole stack (D16); `0` = old direct-only model |
 | `OMP_NUM_THREADS` | `2` | OpenMP threads **per worker** (set on the worker) |
 
 The worker pool also reads BRKGA knobs (`PALLET_API_POPULATION_SIZE`, …); see

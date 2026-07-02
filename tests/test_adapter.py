@@ -75,6 +75,24 @@ def test_core_gate_rejects_weight_near_no_limit_sentinel():
     adapter.validate_request(body, max_boxes=500)
 
 
+def test_core_gate_rejects_dims_over_1e6():
+    # A3-1 (F16): the gate covers library callers too — dims past 1e6 hit
+    # int64 wraparound territory in the JIT hot paths; 2**63 raised a raw
+    # OverflowError as a solver_error before this guard.
+    body = {"boxes": [{"id": "B1", "length": 1_000_001, "width": 10,
+                       "height": 10}],
+            "pallet": {"length": 100, "width": 100, "height": 100}}
+    with pytest.raises(PackingInputError, match="supported range"):
+        adapter.validate_request(body, max_boxes=500)
+    body["boxes"][0]["length"] = 2**63
+    with pytest.raises(PackingInputError, match="supported range"):
+        adapter.validate_request(body, max_boxes=500)
+    body["boxes"][0]["length"] = 1_000_000
+    body["pallet"] = {"length": 1_000_000, "width": 1_000_000,
+                      "height": 1_000_000}
+    adapter.validate_request(body, max_boxes=500)      # at the bound: fine
+
+
 def test_config_overhang_flag():
     p = {"length": 100, "width": 100, "height": 100}
     c0 = adapter._config({"pallet": {**p, "max_overhang": 0}, "options": {}})

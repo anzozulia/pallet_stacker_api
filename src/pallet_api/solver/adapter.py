@@ -72,6 +72,7 @@ def _config(payload: Dict[str, Any],
         recenter_layout=bool(cfg.get("recenter", True)),
         align_orientations=bool(cfg.get("align_orientations", True)),
         realism_weight=float(cfg.get("realism_weight", 1.0)),
+        transitive_load_bearing=bool(cfg.get("transitive_load", True)),
     )
 
 
@@ -103,12 +104,21 @@ def solve(payload: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     # Bigger caller budgets buy more polish. The realism fitness gives local
     # search a real gradient, so its budget is no longer a fixed no-op 4s.
     ls_budget = min(8.0, max(2.0, 0.25 * budget))
+    # F18 mitigation (hardening round 2): force the v2 warm-start for small
+    # instances even without constraints — the driver's auto-gate only seeds
+    # v2 when constraints exist, but v2's layer/block builder tiles exact-fit
+    # instances that the greedy BRKGA rotation argmax deterministically
+    # breaks (a perfect 2x2x2 tiling packed 7/8 on every seed). The deadline
+    # (half the budget) bounds it. Caveat: the driver skips the seed when
+    # 0.5*budget < 1 s, so sub-2 s budgets silently forgo the mitigation.
+    n_small = len(payload["boxes"]) <= 60          # tunable
     result = brkga_pack_v35(
         boxes, pallet, _config(payload, cfg),
         time_limit_s=budget, max_pallets=max_pallets, seed=seed,
         population_size=cfg["population_size"], n_populations=cfg["n_populations"],
         patience=cfg["patience"], n_modes=cfg["n_modes"],
         local_search_budget_s=ls_budget,
+        use_v2_seed=True if n_small else None,
         validate_input=True, verbose=False,
     )
     return _json_safe(to_json(result, pallet))

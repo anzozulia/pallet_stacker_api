@@ -15,5 +15,11 @@ class WorkerSettings:
     max_jobs = 1
     # Backstop above the in-task hard kill so the in-task timeout fires first.
     job_timeout = settings.hard_budget_s + 30
+    # A cancelled/interrupted job (worker redeploy, job_timeout backstop) is
+    # re-enqueued by arq; cap it at ONE retry — jobs survive a redeploy, but a
+    # pathological job can't be solved 5x (arq's default max_tries). The first
+    # attempt's spawn subprocess dies at its own hard kill, so the transient
+    # overlap is bounded. (Hardening round 2, A3-7.)
+    max_tries = 2
     keep_result = settings.result_ttl_s
     keep_result_forever = False

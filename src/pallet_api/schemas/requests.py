@@ -16,6 +16,11 @@ from pydantic import BaseModel, Field, model_validator
 # Weight-like caps are bounded well under the core's 1e18 "no limit" sentinel
 # (see the core gate) — and 1e12 of any real unit is already absurd for a pallet.
 _MAX_WEIGHT = 1e12
+# Spatial dims are bounded so every int64 product in the core's numpy/numba hot
+# paths provably fits: with dims <= 1e6, areas <= 1e12 and volumes <= 1e18 <
+# int64 max (9.22e18). 1e6 units ≈ 1 km in mm — pick a smaller unit if you
+# exceed it. (Hardening round 2, F16.)
+_MAX_DIM = 1_000_000
 
 
 class BoxIn(BaseModel):
@@ -26,11 +31,15 @@ class BoxIn(BaseModel):
                     "so you can map each placement back to its input. Duplicate "
                     "ids → `400`.",
                     examples=["B0001"])
-    length: int = Field(..., gt=0, description="Length — a positive INTEGER (any unit, "
-                        "consistent across the request). Non-integers are rejected "
+    length: int = Field(..., gt=0, le=_MAX_DIM,
+                        description="Length — a positive INTEGER ≤ 1e6 (any unit, "
+                        "consistent across the request; 1e6 ≈ 1 km in mm — pick a "
+                        "smaller unit if you exceed it). Non-integers are rejected "
                         "(`422`), never rounded.", examples=[300])
-    width: int = Field(..., gt=0, description="Width — a positive integer.", examples=[200])
-    height: int = Field(..., gt=0, description="Height — a positive integer.", examples=[150])
+    width: int = Field(..., gt=0, le=_MAX_DIM,
+                       description="Width — a positive integer ≤ 1e6.", examples=[200])
+    height: int = Field(..., gt=0, le=_MAX_DIM,
+                        description="Height — a positive integer ≤ 1e6.", examples=[150])
     weight: float = Field(0.0, ge=0, le=_MAX_WEIGHT, allow_inf_nan=False,
                           description="Box weight (any consistent unit; may "
                           "be fractional, at most 1e12). Default 0.", examples=[2.5])
@@ -59,12 +68,15 @@ class BoxIn(BaseModel):
 class PalletIn(BaseModel):
     """The target pallet / container. Dimensions are integers in the same unit as
     the boxes."""
-    length: int = Field(..., gt=0, description="Pallet length — a positive integer "
+    length: int = Field(..., gt=0, le=_MAX_DIM,
+                        description="Pallet length — a positive integer ≤ 1e6 "
                         "(same unit as the boxes).", examples=[1200])
-    width: int = Field(..., gt=0, description="Pallet width — a positive integer.",
+    width: int = Field(..., gt=0, le=_MAX_DIM,
+                       description="Pallet width — a positive integer ≤ 1e6.",
                        examples=[1000])
-    height: int = Field(..., gt=0, description="Pallet/stack height limit — a positive "
-                        "integer.", examples=[1500])
+    height: int = Field(..., gt=0, le=_MAX_DIM,
+                        description="Pallet/stack height limit — a positive "
+                        "integer ≤ 1e6.", examples=[1500])
     max_weight: Optional[float] = Field(
         None, ge=0, le=_MAX_WEIGHT, allow_inf_nan=False,
         description="Max total weight the pallet can carry (at most 1e12). Omitted or "
@@ -123,8 +135,17 @@ class PackRequest(BaseModel):
                                "service box cap (default 500) — over-cap requests are "
                                "rejected with `400`.")
     pallet: PalletIn = Field(..., description="The target pallet/container.")
-    options: OptionsIn = Field(default_factory=OptionsIn,
-                               description="Solver options (optional).")
+    options: Optional[OptionsIn] = Field(default_factory=OptionsIn,
+                                         description="Solver options (optional; "
+                                         "omitting and `null` are equivalent).")
+
+    @model_validator(mode="after")
+    def _null_options_means_defaults(self):
+        # `"options": null` and omission are equivalent (same convention as
+        # the unlimited caps).
+        if self.options is None:
+            self.options = OptionsIn()
+        return self
 
     model_config = {"json_schema_extra": {"examples": [{
         "boxes": [

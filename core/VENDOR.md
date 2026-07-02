@@ -26,7 +26,16 @@ builds the core (Cython extensions) into the image with no external dependency.
   sentinel), recenter/CoG-envelope interaction, a global post-pass budget,
   and duplicate-id realism defense — see ADRs D14/D15 and upstream
   `docs/reports/35`. Flag-OFF golden and BR smoke re-verified
-  bit-identical. Kept in sync with upstream.
+  bit-identical. Plus round 2 (upstream `f18bb6f`, 2026-07-03) — the first
+  decoder-twin change: spatial dims bounded at 1e6 (int64 wraparound guard),
+  the floor deck-contact rule under overhang (no more off-deck floating
+  floor boxes), and flag-gated transitive load bearing
+  (`transitive_load_bearing`, default OFF; the service enables it) with a
+  transitive dry-run check + commit in BOTH decoder twins, v2, and the
+  validator — see ADR D16 and upstream `docs/reports/36`. Verified by the
+  extended backend-equivalence campaign (2670 comparisons, 0 mismatches,
+  new branches proven fired), BR smoke + flags-off golden bit-identical.
+  Kept in sync with upstream.
 - **Contents:** source only — the `pallet_packer/` package (`.py` + Cython
   `.pyx`/`.pxd`) plus its build files (`setup.py`, `pyproject.toml`). No built
   artifacts (`.so`/`.c`/`.html`/numba caches) are committed; the Docker build
