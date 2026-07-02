@@ -127,6 +127,37 @@ reverse proxy/LB it should honour `X-Forwarded-For` (a `trust_proxy` switch), el
 all forwarded clients share one bucket. *Rejected for MVP:* API keys / quotas
 (implies accounts); token-bucket (fixed-window is sufficient here).
 
+### D14 — Realism layer: recenter + orientation alignment + realism fitness — **ACCEPTED (implemented)**
+A 19-scenario live study showed the solver's layouts were constraint-correct but
+"real-world wrong": loads jammed into the (0,0) corner (CoG up to 67% off-centre
+— a forklift hazard), identical cartons randomly rotated within a layer, heavy
+boxes stacked on light ones, and towers next to bare deck. Root cause: fitness is
+pure volume, which TIES for every feasible layout once all boxes fit, so seeds,
+budgets, evolution, and local search were observational no-ops and layout quality
+was decided entirely by corner-seeking decoder tie-breaks. *Implemented (all
+default OFF in the core, ON in the service; independent env kill-switches, D9):*
+(a) `postprocess.py` — a rigid per-pallet recenter (weighted CoG to deck centre,
+never touches z, never creates overhang) and a feasibility-preserving same-SKU
+orientation re-alignment per z-level, both replay-validated with full revert;
+(b) an epsilon-scaled secondary fitness term (weights 0.5/0.4/0.1: height
+moment + max height + height-class consistency — the orientation term is keyed
+on the vertical extent, since yaw variation within a layer is legitimate
+interlocking while a tipped box breaks the layer top) threaded through every
+fitness site — batch, polish phases, SKU-aware, v2-hybrid, and the v2
+candidate tie-break — with a bounded-loss guarantee: it can never cost more
+than half the smallest box's volume, so it never drops a box; (c) a gated
+heavy-first seed chromosome making `heavy_on_bottom` real in the v3.5 path.
+*Known residual (`make realism-check`):* in dense mixed layers a single
+straggler box can still be tipped by the greedy per-placement rotation argmax
+when no flat placement fits its gap — flagged TIPPED_IN_LAYER by the battery
+(3/19 scenarios); the fix is the deferred decoder-level rotation tie-break.
+*Consequence:* `options.seed` and `time_budget_s` now have observable effect
+(the fitness landscape has a gradient). *Rejected:* enabling the CoG-envelope
+constraint (rejects placements, can't centre a layout, misfires on
+unlimited-weight pallets); per-box centering in the decoders (corner anchoring
+is what makes EMS packing dense). *Deferred:* decoder-level rotation tie-breaks
+and brick-bond interlock (Cython twin fan-out + BR re-validation risk).
+
 ---
 
 ## Decisions still open

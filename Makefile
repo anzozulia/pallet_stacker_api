@@ -3,11 +3,14 @@
 # Cython extensions are built into the image. `make run`/`worker` run on the host
 # and need the core built locally first (`pip install ./core`); Docker is preferred.
 
-.PHONY: help install lint test test-docker test-e2e run worker up down logs ps clean smoke loadtest
+.PHONY: help install lint test test-docker test-e2e run worker up down logs ps clean smoke \
+	loadtest realism-check
+
+BASE ?= http://localhost:8000/api/v1
 
 help:  ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "  %-12s %s\n", $$1, $$2}'
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
 
 install:  ## Install the service + dev deps (editable)
 	pip install -e ".[dev]"
@@ -52,6 +55,9 @@ clean:  ## Stop the stack and remove its volumes + locally-built images
 
 smoke:  ## Run the end-to-end smoke test against a running stack
 	bash scripts/smoke_e2e.sh
+
+realism-check:  ## Run the 19-scenario realism acceptance battery against a running stack (BASE=...)
+	python3 scripts/realism_scenarios.py --base $(BASE) --out results/realism
 
 loadtest:  ## Phase 6 load test: scaled stack + a burst (see docs/05_load_profile.md)
 	LT_OMP=2 docker compose -f docker-compose.loadtest.yml up -d --build --scale worker=4

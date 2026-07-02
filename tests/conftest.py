@@ -75,6 +75,9 @@ def fast_cfg() -> dict:
         "n_populations": 2,
         "patience": 8,
         "n_modes": 6,
+        "recenter": True,
+        "align_orientations": True,
+        "realism_weight": 1.0,
     }
 
 

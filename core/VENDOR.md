@@ -11,7 +11,14 @@ builds the core (Cython extensions) into the image with no external dependency.
   block decoder picks the largest floor footprint before stacking height
   (`find_best_block_at_pos` + `blocks.py`), so identical boxes on a tall pallet
   spread into flat layers instead of a corner tower. BR1-7 verified
-  density-neutral (bit-identical). Kept in sync with upstream.
+  density-neutral (bit-identical). Plus the realism layer (upstream `9be8f1a`,
+  2026-07-02): recenter + orientation-alignment post-passes
+  (`postprocess.py`), the epsilon-scaled secondary realism fitness
+  (`_brkga_core/realism.py`), a gated heavy-first seed, and a realism
+  tie-break in the v2 candidate set — all default OFF in the core (the
+  service enables them; see ADR D14 and upstream `docs/reports/34`).
+  Flag-OFF default behavior verified bit-identical pre/post. Kept in sync
+  with upstream.
 - **Contents:** source only — the `pallet_packer/` package (`.py` + Cython
   `.pyx`/`.pxd`) plus its build files (`setup.py`, `pyproject.toml`). No built
   artifacts (`.so`/`.c`/`.html`/numba caches) are committed; the Docker build

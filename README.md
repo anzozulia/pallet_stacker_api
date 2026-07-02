@@ -90,6 +90,9 @@ All operational knobs are environment variables (12-factor); defaults shown. Cop
 | `PALLET_API_RESULT_TTL_S` | `3600` | How long a result is fetchable (then `404`) |
 | `PALLET_API_DEFAULT_MAX_PALLETS` | `1` | Default `max_pallets` |
 | `PALLET_API_DEFAULT_SEED` | `42` | Default RNG seed (determinism) |
+| `PALLET_API_RECENTER` | `1` | Centre the finished load on the deck (D14) |
+| `PALLET_API_ALIGN_ORIENTATIONS` | `1` | Unify same-SKU rotations per layer (D14) |
+| `PALLET_API_REALISM_WEIGHT` | `1.0` | Heavy-low/anti-tower fitness term; `0` = off (D14) |
 | `OMP_NUM_THREADS` | `2` | OpenMP threads **per worker** (set on the worker) |
 
 The worker pool also reads BRKGA knobs (`PALLET_API_POPULATION_SIZE`, …); see

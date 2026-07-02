@@ -17,6 +17,11 @@ def _f(name: str, default: float) -> float:
     return float(os.getenv(name, str(default)))
 
 
+def _b(name: str, default: bool) -> bool:
+    return os.getenv(name, "1" if default else "0").strip().lower() not in (
+        "0", "false", "no", "off", "")
+
+
 class Settings:
     # --- Redis / queue ---
     redis_url: str = os.getenv("PALLET_API_REDIS_URL", "redis://localhost:6379")
@@ -41,6 +46,13 @@ class Settings:
     patience: int = _i("PALLET_API_PATIENCE", 150)
     n_modes: int = _i("PALLET_API_N_MODES", 6)
 
+    # --- realism layer (D14) ---
+    # Default ON for the service (the core's own defaults are OFF). Each is
+    # an independent kill-switch for rollback/debugging.
+    recenter: bool = _b("PALLET_API_RECENTER", True)
+    align_orientations: bool = _b("PALLET_API_ALIGN_ORIENTATIONS", True)
+    realism_weight: float = _f("PALLET_API_REALISM_WEIGHT", 1.0)
+
     # --- abuse protection ---
     rate_limit_per_min: int = _i("PALLET_API_RATE_LIMIT_PER_MIN", 30)
 
@@ -61,6 +73,9 @@ class Settings:
             "n_populations": self.n_populations,
             "patience": self.patience,
             "n_modes": self.n_modes,
+            "recenter": self.recenter,
+            "align_orientations": self.align_orientations,
+            "realism_weight": self.realism_weight,
         }
 
 

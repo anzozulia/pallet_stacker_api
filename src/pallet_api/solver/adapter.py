@@ -48,11 +48,15 @@ def validate_request(payload: Dict[str, Any], *, max_boxes: int) -> None:
     check_packing_input(boxes, pallet, max_boxes=max_boxes)
 
 
-def _config(payload: Dict[str, Any]) -> PackerConfig:
+def _config(payload: Dict[str, Any],
+            cfg: Dict[str, Any] | None = None) -> PackerConfig:
+    cfg = cfg or {}
     opts = payload.get("options") or {}
     overhang = float(payload["pallet"].get("max_overhang") or 0) > 0
     # Sensible service defaults: stability ON (support + centroid), fragility
     # respected; CoG envelope OFF by default (advanced, would over-reject).
+    # Realism layer (D14) ON by default: recentred loads, aligned same-SKU
+    # orientations, and a heavy-low/anti-tower fitness gradient.
     return PackerConfig(
         support_ratio=float(opts.get("support_ratio", 0.8)),
         require_centroid_supported=True,
@@ -60,6 +64,9 @@ def _config(payload: Dict[str, Any]) -> PackerConfig:
         cog_envelope_fraction=1.0,
         cog_check_min_load_fraction=1.0,
         allow_pallet_overhang=overhang,
+        recenter_layout=bool(cfg.get("recenter", True)),
+        align_orientations=bool(cfg.get("align_orientations", True)),
+        realism_weight=float(cfg.get("realism_weight", 1.0)),
     )
 
 
@@ -88,11 +95,15 @@ def solve(payload: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     budget = max(1.0, min(budget, cfg["soft_budget_s"]))            # clamp to ceiling
     max_pallets = int(opts.get("max_pallets") or cfg["default_max_pallets"])
     seed = int(cfg["default_seed"] if opts.get("seed") is None else opts["seed"])
+    # Bigger caller budgets buy more polish. The realism fitness gives local
+    # search a real gradient, so its budget is no longer a fixed no-op 4s.
+    ls_budget = min(8.0, max(2.0, 0.25 * budget))
     result = brkga_pack_v35(
-        boxes, pallet, _config(payload),
+        boxes, pallet, _config(payload, cfg),
         time_limit_s=budget, max_pallets=max_pallets, seed=seed,
         population_size=cfg["population_size"], n_populations=cfg["n_populations"],
         patience=cfg["patience"], n_modes=cfg["n_modes"],
+        local_search_budget_s=ls_budget,
         validate_input=True, verbose=False,
     )
     return _json_safe(to_json(result, pallet))
