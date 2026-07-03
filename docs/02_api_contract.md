@@ -138,7 +138,16 @@ rejected with the field named in `problems`, never silently ignored — a
 misspelled option used to mean solving with defaults and no signal. Clients
 must send exactly the documented fields.
 
-`429 Too Many Requests` — rate limited (per-IP). `503 degraded` — Redis (queue /
+`429 Too Many Requests` — rate limited (per-IP). Since round 5 the limiter
+runs BEFORE the request body is received (an over-limit client cannot make
+the server read or parse 10 MB bodies, and oversize attempts count toward
+the limit), and result polling has its own generous per-IP cap
+(`PALLET_API_POLL_RATE_LIMIT_PER_MIN`, default 600/min on `GET /jobs/*`;
+`/health`, `/version` and `/docs` are never limited). CORS for browser
+front-ends is opt-in via `PALLET_API_CORS_ORIGINS` (absent by default —
+server-side callers need nothing). Misconfigured deployments fail fast: a
+zero/negative/inverted budget or limit env refuses to boot instead of
+serving a silently dead API. `503 degraded` — Redis (queue /
 result store) unreachable; returned by `/pack`, `/jobs/{id}`, and the rate
 limiter alike.
 

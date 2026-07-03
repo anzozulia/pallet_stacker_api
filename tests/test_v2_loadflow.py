@@ -134,3 +134,28 @@ def test_underfill_booked_and_visible_to_later_placements():
     light = Box(id="T2", length=400, width=200, height=100, weight=4.0)
     t2 = Placement(box=light, rotation=ROT, x=0, y=200, z=100)
     assert st._load_bearing_ok(t2, [(cand, 400 * 200)]) is True
+
+
+def test_pallet_cap_tolerance_unified_round5():
+    """R1 (round 5): validate must accept a v2-legal total inside the
+    scale-aware tolerance band (limit 1e6 + 2e-4 was a spurious warning
+    before — v2's feasible used load_tol, validate used absolute 1e-6)."""
+    from pallet_packer.validate import validate
+    pal = Pallet(length=1200, width=800, height=1500, max_weight=1e6)
+    cfg = _cfg()
+    from pallet_packer.packer import PackResult
+    st = PalletState(pal, "P001", cfg)
+    for i, w in enumerate((1e6 / 3 + 1e-4, 1e6 / 3, 1e6 / 3)):
+        b = Box(id=f"w{i}", length=400, width=400, height=100, weight=w)
+        st.placements.append(Placement(box=b, rotation=ROT,
+                                       x=400 * i, y=0, z=0))
+        st.total_weight += w
+    res = PackResult(pallets=[st], unpacked=[])
+    errs = [e for e in validate(res, pal, config=cfg) if "total weight" in e]
+    assert errs == [], errs           # inside load_tol(1e6) = 1e-3
+    # far beyond the tolerance must still fail
+    b4 = Box(id="w4", length=400, width=400, height=100, weight=10.0)
+    st.placements.append(Placement(box=b4, rotation=ROT, x=0, y=400, z=0))
+    st.total_weight += 10.0
+    errs = [e for e in validate(res, pal, config=cfg) if "total weight" in e]
+    assert errs, "10 kg over the cap must still be flagged"

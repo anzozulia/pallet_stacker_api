@@ -50,7 +50,14 @@ builds the core (Cython extensions) into the image with no external dependency.
   PASS) and the NEW standing physics gate
   `scripts/_verify/verify_load_physics.py` (90 violations pre-fix →
   0/14,544 post-fix); BR smoke + all three goldens bit-identical.
-  Kept in sync with upstream.
+  Plus rounds 4–5 (upstream `65cf0e6`, 2026-07-04): the round-4 evaluation
+  confirmed the load model holds (0 violations across 7,500 targeted
+  probes); round 5 unified the pallet-weight-cap tolerance with
+  `models.load_tol` across validate + both twins (spurious at-limit
+  warnings), made `to_json` honest about floaters and overhang deck
+  contact, and added load-bearing guard comments — see upstream
+  `docs/reports/38`. Equivalence + physics gates PASS, BR smoke and all
+  goldens bit-identical. Kept in sync with upstream.
 - **Contents:** source only — the `pallet_packer/` package (`.py` + Cython
   `.pyx`/`.pxd`) plus its build files (`setup.py`, `pyproject.toml`). No built
   artifacts (`.so`/`.c`/`.html`/numba caches) are committed; the Docker build

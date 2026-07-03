@@ -313,6 +313,28 @@ smoke bit-identical. The physics gate exists because equivalence testing is
 STRUCTURALLY blind to twins that are identically wrong — that is how F20/F21
 survived two rounds.
 
+*Round-5 addendum (2026-07-04, hardening round 4 → 5):* round-4 evaluation
+confirmed the D17 fixes hold (300-case repair fuzz + 7,200-decode
+rider-hostile physics fuzz, 0 violations) and closed the leftovers:
+(a) the pallet-weight cap tolerance is now `load_tol` on ALL four surfaces
+(v2 `feasible`, `validate()`, both JIT twins) — previously three different
+epsilons could make an engine-legal at-limit heavy plan ship with spurious
+`warnings` (R1); (b) ops robustness: fail-fast settings validation
+(0 < SOFT < HARD, limits > 0 — a typo'd `PALLET_API_HARD_BUDGET_S=0` used
+to turn every job into `timeout` with a green /health), responsive
+solver-crash detection (a child dead without a result is reported in
+<1 s, not after the full 120 s hard budget), pre-body rate limiting +
+a poll limiter + env-gated CORS (R2/R3/R4); (c) reporting honesty:
+floaters no longer claim `supported_by: ["floor"]`, floor boxes under
+overhang report actual deck contact (R5). *Deferred with measurements
+(R7):* the F21 rider scan costs ~2× RAW decode throughput at n=500 on
+plane-aligned worst-case geometry (~20% at n=200, noise at n≤60) but has
+ZERO measured end-to-end effect (identical service wall times and
+bit-identical solution quality in fixed-budget A/B) — the designed fix
+(a per-pallet distinct-bottom-z plane set as a pre-filter, so the O(n)
+rider scan only runs when the candidate's top matches an existing plane)
+stays in the backlog until profiling ever shows decode-bound solves.
+
 ---
 
 ## Decisions still open

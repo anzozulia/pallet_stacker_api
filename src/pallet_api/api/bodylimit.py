@@ -11,8 +11,8 @@ bytes (chunked uploads included). The counting path raises an HTTPException —
 NOT a custom exception — because FastAPI's body-read wrapper catches generic
 exceptions and remaps them to a plain 400 ("error parsing the body") while
 re-raising HTTPExceptions untouched; the app's registered handler then formats
-the envelope. The limit is read from settings per request so deployments (and
-tests) can tune `PALLET_API_MAX_BODY_BYTES` live.
+the envelope. The limit is read from the settings OBJECT per request (tests
+monkeypatch the attribute); the env var itself is parsed once at import.
 """
 from __future__ import annotations
 

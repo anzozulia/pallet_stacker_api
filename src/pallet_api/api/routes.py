@@ -7,14 +7,13 @@ import asyncio
 import logging
 
 from arq.jobs import Job, JobStatus
-from fastapi import APIRouter, Depends, HTTPException, Path, Request
+from fastapi import APIRouter, HTTPException, Path, Request
 from fastapi.responses import JSONResponse
 from redis.exceptions import RedisError
 
 from pallet_packer import PackingInputError
 
 from pallet_api.config import settings
-from pallet_api.api.limits import enforce_rate_limit
 from pallet_api.schemas import (PackRequest, JobAccepted, JobState, ErrorEnvelope,
                                 HealthState, VersionInfo)
 from pallet_api.solver.adapter import validate_request
@@ -87,7 +86,6 @@ async def version():
 
 
 @router.post("/pack", tags=[PACKING], status_code=202, response_model=JobAccepted,
-             dependencies=[Depends(enforce_rate_limit)],
              summary="Submit a packing job",
              response_description="Job accepted and queued; poll `links.self`.",
              responses={400: _RESP_400, 413: _RESP_413, 422: _RESP_422,

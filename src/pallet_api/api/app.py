@@ -19,6 +19,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from pallet_api.config import settings
 from pallet_api.api.bodylimit import BodySizeLimitMiddleware
+from pallet_api.api.limits import RateLimitMiddleware
 from pallet_api.api.routes import router
 
 DESCRIPTION = """
@@ -128,7 +129,23 @@ def create_app() -> FastAPI:
     )
     app.add_exception_handler(StarletteHTTPException, _http_exc_handler)
     app.add_exception_handler(RequestValidationError, _validation_exc_handler)
+    # Middleware order (add_middleware is LIFO — last added runs first):
+    # rate limiter OUTERMOST so a 429 is decided before any body byte is
+    # received (round 5, R4); then the body cap; then the app.
     app.add_middleware(BodySizeLimitMiddleware)
+    app.add_middleware(RateLimitMiddleware)
+    if settings.cors_origins.strip():
+        # Round 5 (R4): env-gated CORS for browser front-ends. Absent env
+        # (the default) = middleware not installed at all.
+        from fastapi.middleware.cors import CORSMiddleware
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=[o.strip() for o in settings.cors_origins.split(",")
+                           if o.strip()],
+            allow_methods=["GET", "POST"],
+            allow_headers=["*"],
+            max_age=3600,
+        )
 
     @app.get("/", include_in_schema=False)
     async def _root():

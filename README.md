@@ -105,7 +105,9 @@ All operational knobs are environment variables (12-factor); defaults shown. Cop
 | `PALLET_API_MAX_BODY_BYTES` | `10485760` | Request-body byte cap (over → `413`) |
 | `PALLET_API_SOFT_BUDGET_S` | `90` | Solver time budget (caller `time_budget_s` ceiling) |
 | `PALLET_API_HARD_BUDGET_S` | `120` | Worker hard wall-clock kill (→ `timeout`) |
-| `PALLET_API_RATE_LIMIT_PER_MIN` | `30` | Per-IP requests per 60-second window |
+| `PALLET_API_RATE_LIMIT_PER_MIN` | `30` | Per-IP `POST /pack` per 60-second window (checked BEFORE the body is read) |
+| `PALLET_API_POLL_RATE_LIMIT_PER_MIN` | `600` | Per-IP `GET /jobs/*` polls per minute |
+| `PALLET_API_CORS_ORIGINS` | *(empty)* | Comma-separated browser origins; empty = no CORS middleware |
 | `PALLET_API_RESULT_TTL_S` | `3600` | How long a result is fetchable (then `404`) |
 | `PALLET_API_DEFAULT_MAX_PALLETS` | `1` | Default `max_pallets` |
 | `PALLET_API_DEFAULT_SEED` | `42` | Default RNG seed (determinism) |

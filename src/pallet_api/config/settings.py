@@ -18,8 +18,14 @@ def _f(name: str, default: float) -> float:
 
 
 def _b(name: str, default: bool) -> bool:
-    return os.getenv(name, "1" if default else "0").strip().lower() not in (
-        "0", "false", "no", "off", "")
+    # Round 5 (R6): a BARE `PALLET_API_X=` key (empty value — a common
+    # compose/.env artifact) means "use the default", NOT False. Only an
+    # explicit falsy string turns a flag off; previously an empty value
+    # silently disabled default-ON features like the realism passes.
+    v = os.getenv(name)
+    if v is None or not v.strip():
+        return default
+    return v.strip().lower() not in ("0", "false", "no", "off")
 
 
 class Settings:
@@ -64,6 +70,17 @@ class Settings:
 
     # --- abuse protection ---
     rate_limit_per_min: int = _i("PALLET_API_RATE_LIMIT_PER_MIN", 30)
+    # Separate, generous cap for result polling (GET /jobs/*) — round 5
+    # (R4): polls used to be completely uncapped per IP.
+    poll_rate_limit_per_min: int = _i("PALLET_API_POLL_RATE_LIMIT_PER_MIN",
+                                      600)
+
+    # --- CORS (round 5, R4) ---
+    # Comma-separated list of allowed browser origins. Empty (default) =
+    # CORS middleware not installed at all — server-to-server callers and
+    # same-origin proxies need nothing; a browser front-end sets e.g.
+    # PALLET_API_CORS_ORIGINS=https://app.example.com
+    cors_origins: str = os.getenv("PALLET_API_CORS_ORIGINS", "")
 
     # --- meta ---
     version: str = os.getenv("PALLET_API_VERSION", "0.1.0")
@@ -89,4 +106,41 @@ class Settings:
         }
 
 
+def _validate(s: "Settings") -> None:
+    """Fail fast at import on configs that would produce a SILENT outage.
+
+    Round 5 (R2): `PALLET_API_HARD_BUDGET_S=0` (or negative, or below the
+    soft budget) used to boot cleanly and then turn EVERY job into
+    `timeout` while /health stayed green; a zero rate limit 429'd every
+    request. Both the API and the worker import this module, so a bad env
+    now refuses to start instead of serving a dead deployment.
+    """
+    problems = []
+    if not (0 < s.soft_budget_s < s.hard_budget_s):
+        problems.append(
+            f"budgets must satisfy 0 < SOFT ({s.soft_budget_s}) < HARD "
+            f"({s.hard_budget_s}) — PALLET_API_SOFT_BUDGET_S / "
+            f"PALLET_API_HARD_BUDGET_S")
+    if s.rate_limit_per_min <= 0:
+        problems.append(
+            f"PALLET_API_RATE_LIMIT_PER_MIN must be > 0 "
+            f"(got {s.rate_limit_per_min})")
+    if s.poll_rate_limit_per_min <= 0:
+        problems.append(
+            f"PALLET_API_POLL_RATE_LIMIT_PER_MIN must be > 0 "
+            f"(got {s.poll_rate_limit_per_min})")
+    if s.max_body_bytes <= 0:
+        problems.append(
+            f"PALLET_API_MAX_BODY_BYTES must be > 0 (got {s.max_body_bytes})")
+    if s.result_ttl_s <= 0:
+        problems.append(
+            f"PALLET_API_RESULT_TTL_S must be > 0 (got {s.result_ttl_s})")
+    if s.max_boxes <= 0:
+        problems.append(f"PALLET_API_MAX_BOXES must be > 0 (got {s.max_boxes})")
+    if problems:
+        raise RuntimeError(
+            "invalid PALLET_API configuration:\n  - " + "\n  - ".join(problems))
+
+
 settings = Settings()
+_validate(settings)
