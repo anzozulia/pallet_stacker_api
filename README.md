@@ -73,10 +73,17 @@ curl -s localhost:8000/api/v1/jobs/<job_id>
 - **Physical load model:** box weights propagate down the whole stack against
   `max_load_on_top` (transitive), and boxes always rest on the deck even with
   `max_overhang` — stacked fragile loads pack fewer boxes than a naive
-  direct-only model would suggest.
+  direct-only model would suggest. Since round 3 (ADR D17) the model is
+  *complete*: block placements can't jointly crush a shared supporter, a box
+  slid under an already-placed one inherits (and must be able to carry) its
+  share of that load, and every `done` result has passed replay validation —
+  in the rare case it hasn't, the service repairs the plan (offenders move to
+  `unpacked_items` with `reason: "load_limit_repair"`) and reports it in a
+  `result.warnings` array. `warnings` present = engine bug worth reporting.
 - Errors share one envelope: `{"error": {"code", "message"?, "problems"?}}`.
-  Schema violations → `422`; contract violations (duplicate id, over-cap) → `400`;
-  oversized body → `413`.
+  Schema violations → `422` — **including unknown/typo'd fields** (a
+  misspelled option is rejected, never silently defaulted); contract
+  violations (duplicate id, over-cap) → `400`; oversized body → `413`.
 - **Fragile + orientation-sensitive goods need both knobs:** `max_load_on_top: 0`
   caps stacked *weight* only — add `rotations: "this_side_up"` to also stop the
   box being tipped on its side.

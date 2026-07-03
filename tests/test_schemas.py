@@ -135,3 +135,30 @@ def test_packrequest_roundtrip_fills_default_options():
 def test_jobstate_rejects_unknown_status():
     with pytest.raises(ValidationError):
         JobState(job_id="x", status="weird")
+
+
+# ------------------------------------------------------- F27: unknown fields
+def test_unknown_option_field_rejected():
+    # Round 3 (F27): a typo'd option used to be silently ignored — the solve
+    # ran with defaults and the caller never knew ("suport_ratio": 0 packed
+    # at 0.8). extra="forbid" turns it into a 422 naming the field.
+    with pytest.raises(ValidationError, match="suport_ratio"):
+        OptionsIn(suport_ratio=0.0)
+    with pytest.raises(ValidationError, match="time_budget"):
+        OptionsIn(time_budget=5)                 # missing the _s suffix
+
+
+def test_unknown_box_and_pallet_fields_rejected():
+    with pytest.raises(ValidationError, match="qty"):
+        BoxIn(id="B1", length=1, width=1, height=1, qty=5)
+    with pytest.raises(ValidationError, match="max_overhung"):
+        PalletIn(length=100, width=100, height=100, max_overhung=10)
+
+
+def test_unknown_toplevel_field_rejected():
+    with pytest.raises(ValidationError, match="palet"):
+        PackRequest(
+            boxes=[{"id": "B1", "length": 1, "width": 1, "height": 1}],
+            pallet={"length": 10, "width": 10, "height": 10},
+            palet={"length": 10, "width": 10, "height": 10},
+        )

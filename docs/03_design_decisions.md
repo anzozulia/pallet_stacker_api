@@ -248,6 +248,71 @@ round):* decoder rotation-score shaping (the F18 root fix) — requires another
 twin campaign; the v2-seed mitigation covers the measured case and the TIPPED
 residual stays documented.
 
+### D17 — Load-model completeness: block overlay, under-fill rule, repair-then-ship — **ACCEPTED (implemented)**
+Round-3 adversarial evaluation (docs/08_hardening_round3.md) proved the load
+model had two remaining holes shared identically by BOTH decoder twins —
+invisible to backend equivalence by construction — plus a v2 bookkeeping bug,
+and that the service *detected* the resulting invalid plans and shipped them
+anyway. At service defaults, 3/30 stack-heavy solves returned physically
+overloaded plans (up to 1.6×), and the volume fitness actively *selects* such
+plans because an overloaded stack packs more. *Implemented (all
+unconditional — these are physics bugs, not features):*
+(a) **F20 block sibling overlay:** the block decoder's Phase 2c checked every
+column of a k×l block against the SAME pre-block loads and then committed all
+of them — a shared supporter never saw the aggregate (each check passed 10 kg
+while 40 kg landed). Checks now read `placement_top_loads + blk_inc`, a
+caller-owned overlay into which each ACCEPTED column's contribution is
+accumulated (via the existing apply routines pointed at the overlay) before
+the next sibling is checked. No float-subtraction rollback — the overlay is
+wiped, the real commit is unchanged.
+(b) **F21 under-fill rule:** a box placed later with its top plane exactly at
+an existing box's bottom becomes a NEW supporter and physically inherits a
+contact-share of that rider's outflow (`share = out_R · a/(T_old + a)`) —
+previously unchecked and unbooked (a fragile mlot=0 box could be slid under a
+loaded slab). Every placement path now computes the inherited load, rejects
+when it exceeds the candidate's own `max_load_on_top`, flows
+`weight + inherited` down the transitive dry-run/commit, and books it on the
+candidate's row. Old supporters are deliberately NOT debited — strictly
+conservative, no negative propagation, no float dust. Blocks with riders on
+any column top shrink to a single box (exact semantics); mirrored in v2
+(`feasible`/`_commit`). Zero-weight riders contribute nothing, keeping
+weightless workloads bit-identical.
+(c) **F22 v2 diamond flow:** v2's recursive `_propagate_load` added a
+re-converged node's second share but blocked its onward distribution —
+everything below a diamond junction undercounted forever, so the (exact)
+dry-run check disagreed with v2's own commit. Replaced by the same
+accumulate-then-distribute worklist the dry-run uses; `regen_top_load`
+inherits the fix.
+(d) **F23 repair-then-ship:** the ONLY result-side `validate()` used to be
+the postprocess pre-gate, which logged "failed pre-pass validation; skipping"
+and served the plan unchanged. `adapter.solve` now validates every final
+plan; on failure it deterministically strips the riders feeding the
+overloaded carrier (topmost first — never leaves a hovering box; ≤ n
+iterations) into `unpacked` with reason `load_limit_repair`, re-validates,
+and surfaces everything in a response `warnings` field + ERROR log. With the
+engine fixes, repair firing at all indicates an unknown engine bug worth
+reporting — "done" now means *physically valid, or repaired with warnings*.
+(e) **F25 scale-aware epsilon:** every load/weight comparison used `+ 1e-6`
+absolute, which is below one double ulp for limits ≥ ~4.5e9 (contract allows
+1e12) — exactly-at-limit stacks flipped on accumulation-order noise. All
+sites (twins, v2, validate, repair) now use `max(1e-6, 1e-9·limit)`
+(`models.load_tol`); identical behavior for limits ≤ 1e3. The core gate also
+bounds finite `max_load_on_top` to the same 1e15 cap as weights.
+*Golden policy change:* F20/F21 fix the DIRECT model too, so the historical
+"flags-off bit-identical" invariant is replaced by "**load-invariant
+scenarios bit-identical** (zero weights / infinite mlot — provably unaffected:
+zero-weight riders contribute nothing) + **load-constrained scenarios
+physics-reviewed re-baseline**" (precedent: the floor-first fix df2ec2c). BR
+stays bit-identical by construction (no load constraints → geometric
+decoders untouched).
+*Verified:* extended backend equivalence PASS (2670 comparisons, 0
+mismatches; new coverage counters block_joint/underfill/epsilon all fired) +
+the NEW standing physics gate `scripts/_verify/verify_load_physics.py`
+(14,544 exact-oracle decodes: 90 violations pre-fix → **0** post-fix) + BR
+smoke bit-identical. The physics gate exists because equivalence testing is
+STRUCTURALLY blind to twins that are identically wrong — that is how F20/F21
+survived two rounds.
+
 ---
 
 ## Decisions still open

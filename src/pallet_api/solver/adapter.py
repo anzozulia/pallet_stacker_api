@@ -4,6 +4,7 @@ Plain dicts in/out so it is picklable for the solve subprocess.
 """
 from __future__ import annotations
 
+import logging
 import math
 from typing import Any, Dict, List, Tuple
 
@@ -12,6 +13,10 @@ from pallet_packer import (
     check_packing_input, to_json,
 )
 from pallet_packer.brkga_v3_5 import brkga_pack_v35
+from pallet_packer.repair import repair_load_violations
+from pallet_packer.validate import validate
+
+logger = logging.getLogger(__name__)
 
 _ROT = {"all": ALL_ROTATIONS, "this_side_up": THIS_SIDE_UP, "none": NO_ROTATION}
 
@@ -109,11 +114,19 @@ def solve(payload: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
     # v2 when constraints exist, but v2's layer/block builder tiles exact-fit
     # instances that the greedy BRKGA rotation argmax deterministically
     # breaks (a perfect 2x2x2 tiling packed 7/8 on every seed). The deadline
-    # (half the budget) bounds it. Caveat: the driver skips the seed when
-    # 0.5*budget < 1 s, so sub-2 s budgets silently forgo the mitigation.
+    # (half the budget) bounds it.
     n_small = len(payload["boxes"]) <= 60          # tunable
+    if n_small:
+        # Round 3 (F28): the driver silently skips the v2 seed when
+        # 0.5*budget < 1 s, which negates the mitigation exactly where it
+        # matters. Small instances finish in well under 2 s anyway, so
+        # floor their budget instead of losing the seed. (Group solves
+        # split the budget per pallet and can still lose the seed on very
+        # group-heavy requests — documented in the API contract.)
+        budget = max(budget, 2.0)
+    config = _config(payload, cfg)
     result = brkga_pack_v35(
-        boxes, pallet, _config(payload, cfg),
+        boxes, pallet, config,
         time_limit_s=budget, max_pallets=max_pallets, seed=seed,
         population_size=cfg["population_size"], n_populations=cfg["n_populations"],
         patience=cfg["patience"], n_modes=cfg["n_modes"],
@@ -121,4 +134,30 @@ def solve(payload: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
         use_v2_seed=True if n_small else None,
         validate_input=True, verbose=False,
     )
-    return _json_safe(to_json(result, pallet))
+    # Round 3 (F23 / ADR D17): never ship a plan that fails replay
+    # validation silently. The engines are believed correct after the
+    # round-3 load-model fixes; this is the last-resort backstop for
+    # residual bugs: deterministically strip the riders feeding any
+    # overloaded carrier into `unpacked` (reason: load_limit_repair) and
+    # surface everything in a `warnings` field.
+    warnings_out: List[str] = []
+    errors = validate(result, pallet, config)
+    if errors:
+        logger.error("solve produced an invalid plan (%d violation(s)); "
+                     "repairing: %s", len(errors), "; ".join(errors[:5]))
+        pre_ids = {b.id for b in result.unpacked}
+        result, actions = repair_load_violations(result, pallet, config)
+        repaired_ids = {b.id for b in result.unpacked} - pre_ids
+        residual = validate(result, pallet, config)
+        warnings_out = ([f"validation: {e}" for e in errors]
+                        + [f"repair: {a}" for a in actions]
+                        + [f"unrepaired: {e}" for e in residual])
+    else:
+        repaired_ids = set()
+    out = _json_safe(to_json(result, pallet))
+    if warnings_out:
+        out["warnings"] = warnings_out
+        for u in out.get("unpacked_items", []):
+            if u.get("item_id") in repaired_ids:
+                u["reason"] = "load_limit_repair"
+    return out

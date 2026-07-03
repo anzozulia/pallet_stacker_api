@@ -178,8 +178,12 @@ class UnpackedItem(BaseModel):
     item_id: Optional[str] = Field(None, description="The box `id` from the request.")
     dimensions: Optional[BoxDims] = Field(None, description="The box's dimensions.")
     weight: Optional[float] = Field(None, description="The box's weight.")
-    reason: Optional[str] = Field(None, description="Why it was left out.",
-                                  examples=["no_feasible_placement"])
+    reason: Optional[str] = Field(None, description="Why it was left out. "
+                                  "`no_feasible_placement` — the solver found no legal "
+                                  "spot; `load_limit_repair` — the box was stripped by "
+                                  "the post-solve load repair (see `warnings`).",
+                                  examples=["no_feasible_placement",
+                                            "load_limit_repair"])
     model_config = _LENIENT
 
 
@@ -192,6 +196,13 @@ class PackResult(BaseModel):
                                                "with its placed `items`.")
     unpacked_items: Optional[List[UnpackedItem]] = Field(None, description="Boxes that "
                                                          "did not fit (empty if all placed).")
+    warnings: Optional[List[str]] = Field(
+        None, description="Present only when the solver's plan failed replay "
+        "validation and was repaired before serving (rare; indicates an "
+        "engine defect worth reporting). Lists the original violations, the "
+        "repair actions (boxes moved to `unpacked_items` with reason "
+        "`load_limit_repair`), and any violations that remained unrepairable. "
+        "Absent on clean solves.")
     model_config = _LENIENT
 
 

@@ -64,6 +64,10 @@ class BoxIn(BaseModel):
         "`support_ratio` is lower or 0). Default false → the global `support_ratio` "
         "applies.")
 
+    # Round 3 (F27): unknown/typo'd fields used to be silently ignored — a
+    # misspelled option meant wrong physics with no signal. Reject instead.
+    model_config = {"extra": "forbid"}
+
 
 class PalletIn(BaseModel):
     """The target pallet / container. Dimensions are integers in the same unit as
@@ -98,6 +102,8 @@ class PalletIn(BaseModel):
                 f"footprint dimension (min(length, width) = {limit})")
         return self
 
+    model_config = {"extra": "forbid"}          # F27 — see BoxIn
+
 
 class OptionsIn(BaseModel):
     """Solver options — all optional, with service defaults."""
@@ -127,6 +133,8 @@ class OptionsIn(BaseModel):
         "can legitimately return identical plans — every dense flat layout ties.",
         examples=[42])
 
+    model_config = {"extra": "forbid"}          # F27 — see BoxIn
+
 
 class PackRequest(BaseModel):
     """A packing job: the boxes, the target pallet, and the solver options."""
@@ -147,7 +155,8 @@ class PackRequest(BaseModel):
             self.options = OptionsIn()
         return self
 
-    model_config = {"json_schema_extra": {"examples": [{
+    model_config = {"extra": "forbid",          # F27 — see BoxIn
+                    "json_schema_extra": {"examples": [{
         "boxes": [
             {"id": "B0001", "length": 300, "width": 200, "height": 150, "weight": 2.5,
              "max_load_on_top": 20.0, "rotations": "this_side_up"},

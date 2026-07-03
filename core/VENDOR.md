@@ -35,6 +35,21 @@ builds the core (Cython extensions) into the image with no external dependency.
   validator — see ADR D16 and upstream `docs/reports/36`. Verified by the
   extended backend-equivalence campaign (2670 comparisons, 0 mismatches,
   new branches proven fired), BR smoke + flags-off golden bit-identical.
+  Plus round 3 (upstream `f0bb308`, 2026-07-03) — load-model completeness,
+  the second decoder-twin change: the block decoder's sibling-column
+  overlay (a k×l block can no longer jointly crush a shared supporter each
+  per-column check individually passed), the under-fill rider rule (a box
+  slid beneath an already-placed one inherits — and must be able to carry —
+  its contact-share of that load, both twins + v2), the v2 diamond-flow
+  commit fix, scale-aware load tolerances (`models.load_tol`), the
+  consulted `_BATCH_AVAILABLE` scalar fallback, and the NEW
+  `pallet_packer/repair.py` (deterministic post-hoc load repair the service
+  uses as its serve-time backstop) — see ADR D17 and upstream
+  `docs/reports/37`. Verified by the extended equivalence campaign (2670
+  comparisons, 0 mismatches, block/under-fill/epsilon counters gate the
+  PASS) and the NEW standing physics gate
+  `scripts/_verify/verify_load_physics.py` (90 violations pre-fix →
+  0/14,544 post-fix); BR smoke + all three goldens bit-identical.
   Kept in sync with upstream.
 - **Contents:** source only — the `pallet_packer/` package (`.py` + Cython
   `.pyx`/`.pxd`) plus its build files (`setup.py`, `pyproject.toml`). No built

@@ -128,3 +128,54 @@ def test_solve_is_deterministic_at_fixed_seed(fast_cfg, pack_payload):
     a = adapter.solve(pack_payload(5, budget=5, seed=7), fast_cfg)
     b = adapter.solve(pack_payload(5, budget=5, seed=7), fast_cfg)
     assert a["input_summary"]["items_packed"] == b["input_summary"]["items_packed"]
+
+
+# ---------------------------------------------------- F28: small-budget floor
+def test_small_instance_budget_floored_to_2s(monkeypatch):
+    """Round 3 (F28): the driver silently skips the v2 seed when
+    0.5*budget < 1 s — exactly the mitigation small instances rely on. The
+    adapter must floor small-instance budgets at 2 s."""
+    seen = {}
+
+    def fake_solver(boxes, pallet, config, **kw):
+        seen.update(kw)
+        from pallet_packer.packer import PackResult
+        return PackResult(pallets=[], unpacked=list(boxes))
+
+    monkeypatch.setattr(adapter, "brkga_pack_v35", fake_solver)
+    body = {"boxes": [{"id": f"B{i}", "length": 10, "width": 10, "height": 10}
+                      for i in range(3)],
+            "pallet": {"length": 100, "width": 100, "height": 100},
+            "options": {"time_budget_s": 1.9}}
+    adapter.solve(body, {"max_boxes": 500, "soft_budget_s": 90.0,
+                         "default_max_pallets": 1, "default_seed": 42,
+                         "population_size": 40, "n_populations": 1,
+                         "patience": 30, "n_modes": 6})
+    assert seen["time_limit_s"] == 2.0
+    assert seen["use_v2_seed"] is True
+
+    body["boxes"] = [{"id": f"B{i}", "length": 10, "width": 10, "height": 10}
+                     for i in range(61)]                       # n > 60
+    adapter.solve(body, {"max_boxes": 500, "soft_budget_s": 90.0,
+                         "default_max_pallets": 1, "default_seed": 42,
+                         "population_size": 40, "n_populations": 1,
+                         "patience": 30, "n_modes": 6})
+    assert seen["time_limit_s"] == 1.9                         # no floor
+    assert seen["use_v2_seed"] is None                         # driver auto
+
+
+def test_exact_fit_holds_at_small_budget():
+    """Live regression for the round-3 battery case exact_fit_budget_1p9:
+    a perfect 2x2x2 tiling at a requested 1.9 s budget must pack 8/8 (it
+    packed 7/8 before the floor, because the v2 seed was silently skipped)."""
+    body = {"boxes": [{"id": f"B{i}", "length": 600, "width": 400,
+                       "height": 750, "weight": 10.0} for i in range(8)],
+            "pallet": {"length": 1200, "width": 800, "height": 1500},
+            "options": {"time_budget_s": 1.9, "seed": 42}}
+    out = adapter.solve(body, {"max_boxes": 500, "soft_budget_s": 90.0,
+                               "default_max_pallets": 1, "default_seed": 42,
+                               "population_size": 40, "n_populations": 1,
+                               "patience": 30, "n_modes": 6,
+                               "recenter": True, "align_orientations": True,
+                               "realism_weight": 1.0, "transitive_load": True})
+    assert out["input_summary"]["items_packed"] == 8

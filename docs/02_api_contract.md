@@ -132,6 +132,12 @@ Too many *boxes* is a `400` from the gate, not a `413`:
 { "error": { "code": "payload_too_large", "message": "Request body exceeds the 10 MB limit." } }
 ```
 
+`422 Unprocessable Entity` — schema violation, including **unknown fields**
+(round 3): a typo'd field name (`"suport_ratio"`, `"time_budget"`) is
+rejected with the field named in `problems`, never silently ignored — a
+misspelled option used to mean solving with defaults and no signal. Clients
+must send exactly the documented fields.
+
 `429 Too Many Requests` — rate limited (per-IP). `503 degraded` — Redis (queue /
 result store) unreachable; returned by `/pack`, `/jobs/{id}`, and the rate
 limiter alike.
@@ -190,6 +196,21 @@ Poll a job. Status progression: `queued` → `running` → terminal
 }
 ```
 
+**Physical validity guarantee (round 3, ADR D17).** Every `done` result has
+passed replay validation (geometry, support, deck contact, and the load
+model). In the rare case the solver emits a plan that fails validation, the
+service deterministically **repairs** it before serving: the boxes feeding
+the overload are moved to `unpacked_items` with `reason:
+"load_limit_repair"`, and a `warnings` array on `result` lists the original
+violations plus the repair actions. `warnings` is absent on clean solves —
+its presence indicates an engine defect worth reporting, not a caller error.
+
+Two result-shape notes: `unpacked_items[].reason` is `no_feasible_placement`
+(the solver found no legal spot) or `load_limit_repair` (stripped by the
+post-solve repair); `utilisation` / `total_volume_utilisation` divide by the
+**raw deck** volume, so with `max_overhang > 0` a legally-overhanging load
+can report **more than 1.0** — that is honest bookkeeping, not an error.
+
 `200 OK` on failure / timeout:
 ```json
 { "job_id": "pk_3f8a…", "status": "timeout",
@@ -229,6 +250,13 @@ core (see `core/VENDOR.md`; the core package exposes no `__version__`).
   control.
 - **Seed exposure.** Default to a fixed service seed (reproducible). Allowing a
   caller seed is harmless and aids reproducibility/debugging.
+- **Small-instance budget floor (round 3).** Requests with ≤ 60 boxes get
+  their effective budget floored at **2 s** regardless of a smaller
+  `time_budget_s`: the exact-fit warm start is silently skipped below 2 s
+  (a perfect 2×2×2 tiling packed 7/8 at 1.9 s), and small instances finish
+  well under the floor anyway. Group-heavy multi-pallet solves split the
+  budget per pallet and can still lose the warm start — give grouped
+  requests generous budgets.
 - **CoG envelope / advanced constraints.** `support_ratio` is exposed in `options`
   for the MVP; the core also supports a CoG envelope and centroid rules. Decide
   per-field which advanced constraints to surface in v1 vs. keep at sensible
