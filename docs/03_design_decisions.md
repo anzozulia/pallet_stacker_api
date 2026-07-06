@@ -429,6 +429,53 @@ backstop that only runs on validation failure, outside the solver budget,
 bounded in practice by the ~30 s hard-kill margin — not worth complexity
 until it is ever observed hot.
 
+### D20 — Sub-assembly toppling: deck-footprint CoG envelope under overhang — **ACCEPTED (implemented)**
+
+**Context (hardening round 7, F35).** F30 (D18) made each FLOOR box keep its
+centroid over the deck, and the stacked rule keeps each box's centroid over
+its immediate SUPPORTER — but nothing checked a connected SUB-ASSEMBLY. A box
+stacked on the OVERHANGING part of a floor box has its CoM over the supporter
+(passes) yet past the deck edge; the combined `{floor+stacked}` weighted CoG
+can then project off the deck-contact region and the pair tips as a unit,
+while `validate()` returns clean. Hand-proven at the DEFAULT config (floor
+1000×1000 at x=200, deck contact 0.8; stacked 200×1000 at x=1000, weight 10 →
+combined CoG x=1063.6 > deck edge 1000). This also disproves a round-6
+framing: F30 does NOT "transitively bound the whole-pallet CoG" — a box on an
+overhanging supporter has its CoM over the supporter, which extends past the
+deck. NOT engine-reachable (0/160 forcing solves; recenter pulls fitting
+layouts on-deck, heavy-low realism + support steer away) — a safety-net blind
+spot, not an engine-produced plan.
+
+**Decision.** Reuse the existing CoG-envelope machinery rather than write a
+new check. Under overhang the adapter auto-activates a deck-footprint
+envelope: `cog_envelope_fraction = 0.5` resolves to exactly `[0,L]×[0,W]`, and
+`cog_check_min_load_fraction = 0.0` enforces it from the second box. The CoG
+envelope is a per-placement **running-CoG reject** in both the v2 engine
+(`_cog_ok`) and the JIT decoders (`_check_cog_envelope_njit`), so activating
+it makes the search **avoid** off-deck-CoG layouts during decode (verified:
+it rejects the hand case) — no new engine code, no twin edit. `validate()` is
+extended to re-check the fraction envelope under overhang as the safety net,
+gated `allow_pallet_overhang and cog_envelope_fraction < 1.0` — exactly the
+regime where the constraint decoders enforce it (overhang forces the cstr
+path), keeping validate no-stricter-than-the-engine (a purely geometric
+no-overhang caller stays unchecked, since the geometric decoders never
+enforce CoG).
+
+**Why the fraction path, not explicit cog ranges.** `recenter_pass` skips
+when an EXPLICIT `cog_x_range`/`cog_y_range` is set, but the config-fraction
+path is exempt — so `fraction = 0.5` keeps the recenter realism pass alive,
+while explicit ranges would disable it. Both drive the same engine envelope.
+
+**Scope & residual.** This is a WHOLE-PALLET CoG constraint — sufficient for
+every engine-reachable case (0/160). It does not catch an isolated
+overhanging sub-tower whose CoG is off-deck while the whole-pallet CoG stays
+central; that per-connected-component precision is a documented deferred
+residual (not reachable in testing; would need a bespoke union-find CoG
+check). F30 (single floor-box centroid) and D20 (multi-box whole-pallet
+balance) are complementary — the running-CoG reject can't judge the first/
+single box, which F30 owns. Inert without overhang (`fraction = 1.0` →
+`cog_active` off), so goldens/BR are bit-identical.
+
 ---
 
 ## Decisions still open

@@ -148,9 +148,13 @@ def test_exact_fit_tiling_packs_all_via_service(fast_cfg):
 def _f30_state(sr=0.25, rc=True):
     from pallet_packer.packer import PalletState
     pallet = Pallet(length=400, width=400, height=1000, max_overhang=400)
+    # cog_envelope_fraction=1.0 isolates the F30 floor-centroid rule from the
+    # round-7 F35 whole-pallet CoG envelope (the default 0.25 would otherwise
+    # auto-activate under overhang and flag these single-box F30 fixtures).
     cfg = PackerConfig(allow_pallet_overhang=True, support_ratio=sr,
                        require_centroid_supported=rc,
-                       enforce_load_bearing=True)
+                       enforce_load_bearing=True,
+                       cog_envelope_fraction=1.0)
     return PalletState(pallet, "P001", cfg), pallet, cfg
 
 

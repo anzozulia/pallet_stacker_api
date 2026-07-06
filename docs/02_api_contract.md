@@ -75,7 +75,13 @@ creates a job and returns immediately — it does **not** solve inline.
     "width": 1000,             // POSITIVE INTEGER
     "height": 1500,            // POSITIVE INTEGER
     "max_weight": 900,         // optional float in (0, 1e12] or null=unlimited
-    "max_overhang": 0          // optional non-negative INTEGER, <= min(length, width)
+    "max_overhang": 0          // optional non-negative INTEGER, <= min(length, width).
+                               //   With overhang > 0 the whole-pallet weighted
+                               //   CoG is constrained to the deck footprint
+                               //   [0,L]x[0,W] (round 7, ADR D20): a load that
+                               //   could only pack by putting its balance past
+                               //   the deck edge (it would tip) is packed
+                               //   balanced or returned unpacked.
   },
   "options": {
     "max_pallets": 10,         // optional int 1..100 (default 1 = single-container).

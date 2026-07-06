@@ -75,6 +75,16 @@ builds the core (Cython extensions) into the image with no external dependency.
   `floor_com_rejections_seen` counter gates PASS) and the standing physics
   gate's new FLOOR_TOPPLE oracle + toppling-regime sweep (2,402 violations
   pre-fix → 0/18,864 post-fix); BR smoke + all three goldens bit-identical.
+  Plus round 7 (upstream `eb73742`, 2026-07) — sub-assembly toppling under
+  overhang (F35): a box stacked on the overhanging part of a floor box passes
+  every per-box check yet the combined `{floor+stacked}` weighted CoG can tip
+  the pair off the deck. Fixed by reusing the CoG-envelope machinery — the
+  service activates a deck-footprint envelope under overhang
+  (`cog_envelope_fraction=0.5`), whose per-placement running-CoG reject makes
+  the engine avoid off-deck-CoG layouts; the one core change is `validate.py`
+  re-checking that envelope under overhang (no decoder twin). Inert without
+  overhang — equivalence 2670/0, physics 0, BR smoke + all three goldens
+  bit-identical. See ADR D20 and upstream `docs/reports/40`.
   Kept in sync with upstream.
 - **Contents:** source only — the `pallet_packer/` package (`.py` + Cython
   `.pyx`/`.pxd`) plus its build files (`setup.py`, `pyproject.toml`). No built

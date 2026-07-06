@@ -84,7 +84,10 @@ curl -s localhost:8000/api/v1/jobs/<job_id>
   only sit tipping past the deck edge under overhang is dropped, not shipped
   as "valid") and a real **multi-pallet objective** (max_pallets > 1 now
   optimises unpacked volume ≫ pallet count ≫ layout, instead of only the
-  first pallet).
+  first pallet). Round 7 (ADR D20) extended toppling to whole
+  **sub-assemblies**: with `max_overhang > 0` the pallet's weighted CoG is
+  held over the deck footprint, so a load that could only pack by putting its
+  balance past the deck edge is packed balanced or returned unpacked.
 - Errors share one envelope: `{"error": {"code", "message"?, "problems"?}}`.
   Schema violations → `422` — **including unknown/typo'd fields** (a
   misspelled option is rejected, never silently defaulted); contract

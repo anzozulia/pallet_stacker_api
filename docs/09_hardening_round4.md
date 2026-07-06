@@ -49,6 +49,16 @@ safety; result-pipe deadlock hypotheses; rotation permutation table;
 
 ## Deferred (unchanged backlog + new entries)
 
-F18 root / TIPPED residual; queue-saturation 503 + the `queued`→404-after-
+F18 root / TIPPED residual; queue-saturation 503 backpressure; the long-queued
 expiry edge; trust_proxy; result caching; R7 plane pre-filter (with
 measurements); `_top_load` id()-keying invariant (documented).
+
+> **Round-7 correction to the queued-expiry framing:** the exact observable is
+> NOT a `404`. arq's queue zset (`arq:queue`) never expires, so a job stuck
+> queued past the ~24 h job-data TTL (`arq:job:{id}`, arq's `expires_extra_ms`
+> default) keeps reporting `status: queued` indefinitely; when a worker finally
+> pops it, its data is gone and arq writes a `JobExecutionFailed('job expired')`
+> → the client sees `{"status":"failed","code":"solver_failed","message":"job
+> expired"}`, i.e. **stuck-`queued` → `job expired` failure**, not a 404. The
+> result TTL (~1 h) does NOT prematurely 404 a still-queued job. Only triggers
+> after >24 h of saturation/outage.

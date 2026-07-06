@@ -64,15 +64,29 @@ def _config(payload: Dict[str, Any],
     opts = payload.get("options") or {}
     overhang = float(payload["pallet"].get("max_overhang") or 0) > 0
     # Sensible service defaults: stability ON (support + centroid), fragility
-    # respected; CoG envelope OFF by default (advanced, would over-reject).
-    # Realism layer (D14) ON by default: recentred loads, aligned same-SKU
-    # orientations, and a heavy-low/anti-tower fitness gradient.
+    # respected. Realism layer (D14) ON by default: recentred loads, aligned
+    # same-SKU orientations, and a heavy-low/anti-tower fitness gradient.
+    #
+    # CoG envelope (round 7, F35 / ADR D20): OFF (fraction 1.0) without
+    # overhang, but AUTO-ACTIVATED to the deck footprint under overhang.
+    # Without overhang a box can't extend past the deck, so the whole-pallet
+    # CoG is always over the deck and the check is redundant. WITH overhang a
+    # sub-assembly (e.g. a heavy box stacked on the overhanging part of a
+    # floor box) can put the pallet's weighted CoG past the deck edge and tip
+    # the load, even though every per-box check passes. cog_envelope_fraction
+    # 0.5 resolves to [0,L]x[0,W] = exactly the deck footprint; the engine's
+    # per-placement running-CoG reject then avoids off-deck-CoG layouts during
+    # decode. cog_check_min_load_fraction 0.0 enforces it from the 2nd box
+    # (not just near a finite weight cap). The fraction path keeps the
+    # recenter realism pass alive (explicit cog ranges would disable it).
+    cog_fraction = 0.5 if overhang else 1.0
+    cog_min_load = 0.0 if overhang else 1.0
     return PackerConfig(
         support_ratio=float(opts.get("support_ratio", 0.8)),
         require_centroid_supported=True,
         enforce_load_bearing=True,
-        cog_envelope_fraction=1.0,
-        cog_check_min_load_fraction=1.0,
+        cog_envelope_fraction=cog_fraction,
+        cog_check_min_load_fraction=cog_min_load,
         allow_pallet_overhang=overhang,
         recenter_layout=bool(cfg.get("recenter", True)),
         align_orientations=bool(cfg.get("align_orientations", True)),
