@@ -471,10 +471,82 @@ every engine-reachable case (0/160). It does not catch an isolated
 overhanging sub-tower whose CoG is off-deck while the whole-pallet CoG stays
 central; that per-connected-component precision is a documented deferred
 residual (not reachable in testing; would need a bespoke union-find CoG
-check). F30 (single floor-box centroid) and D20 (multi-box whole-pallet
+check) — **closed in round 8 (D21), which also corrects the "union-find" note
+below: the correct partition is the VERTICAL support graph, not face
+adjacency**. F30 (single floor-box centroid) and D20 (multi-box whole-pallet
 balance) are complementary — the running-CoG reject can't judge the first/
 single box, which F30 owns. Inert without overhang (`fraction = 1.0` →
 `cog_active` off), so goldens/BR are bit-identical.
+
+---
+
+### D21 — Per-assembly toppling: deck-contact hull certifier under overhang — **ACCEPTED (implemented)**
+
+**Context (hardening round 8, F36).** D20's envelope binds the WHOLE-pallet
+CoG; it is structurally blind to a locally-tipping sub-assembly when other
+deck mass re-centres the aggregate. Every remaining stability guard is either
+per-single-box (F30 floor centroid; `_centroid_supported`, which only requires
+a stacked box's centroid over its SUPPORTER — and the supporter can itself
+overhang) or whole-pallet (D20). Nothing checked a connected sub-ASSEMBLY.
+Hand-proven at the default config (L=1200, overhang=300): a heavy deck
+counterweight M(200×1000×1000, w1000)@x0, a light overhanging floor box
+A(1000×1000×100, w100)@x400 (deck-contact 0.80, F30-ok), and a heavy
+B(200×1000×100, w400) on A's overhang tail @x1200 → whole-pallet CoG x=473.3 ∈
+[0,1200] (D20 passes), yet the detached component {A,B} has CoG x=1220 > deck
+edge 1200 and tips 20 mm. Safety-net/validator blind spot, even LESS reachable
+than F35 (the running-CoG reject blocks B on every decode order unless the
+counterweight lands first; heavy-high B is realism-penalised; the floor gap is
+decode-preferred).
+
+**Decision.** Add a per-assembly stability check to `validate()` only (§8,
+pure Python, no decoder twin), the CERTIFYING safety gate for both the shipped
+plan and postprocess edits. Partition placements into rigid assemblies =
+connected components under the VERTICAL resting-on relation; each assembly's
+weighted CoG must project within the convex hull of its own deck-contact
+region (the union of its floor boxes' on-deck rectangles). An engine-side
+per-assembly running reject (twinned, F30-style) was made CONTINGENT on the
+round-8 reachability probe (full `brkga_pack_v35`, service config, 210
+adversarial instances incl. counterweight-forcing generators): it measured 0
+engine-produced tips (0/210, two independent detectors — see
+`docs/12_hardening_round8.md`), so the engine already
+avoids these layouts and the validate-only certifier is proportionate —
+mirroring F35's disposition (engine avoids + validate certifies).
+
+**Why the vertical support graph, NOT face adjacency.** The obvious "union-find
+over all face contacts" is physically WRONG: a vertical side face transmits no
+restraint against tipping outward, so it would (a) false-MERGE the disjoint
+counterweight M into {A,B} and compute a central CoG that masks the tip, and
+(b) miss two side-by-side stacks that each tip on their own. Assemblies are
+joined ONLY through the resting-on relation (`_contact_area`'s `abs(z−z2)>EPS`
+guard already excludes side faces). Conservative and correct for a static
+packer (friction/interlock are out of scope).
+
+**Why the convex hull, not a bounding rectangle.** The bounding rect is a
+superset of the true support polygon → too permissive → could miss a tip in a
+multi-floor-box gap. The convex hull is the physically-correct support polygon
+and is never spuriously strict (a stable layout has its CoG inside its
+ground-contact hull by definition). For the dominant single-floor-root case
+they coincide (the hull is that one rectangle).
+
+**Inert without overhang (proof).** Gated `allow_pallet_overhang and
+require_centroid_supported`, exactly F30's gate. Without overhang a floor
+box's deck-contact rectangle IS its full footprint, so the per-box
+centroid-over-supporter rule inductively places every box's centre — hence the
+weighted CoG, a convex combination of those centres — inside the assembly's
+deck-contact hull. So §8 can never fire without overhang → goldens/BR/geometric
+callers bit-identical. Also skipped for a single-placement pallet (F30 owns the
+lone floor box).
+
+**Also this round: F37** — `validate()` §7 no longer flags a single-placement
+pallet's CoG (the engines never CoG-check the first box: v2 `_cog_ok`'s
+`not self.placements` bypass; the JIT new-bin path seeds the box with no
+envelope check), restoring validate's no-stricter-than-the-engine contract.
+And the serve-time repair pipeline's "ship a CoG/geometry residual with a
+warning" behaviour (repair only strips `max_load_on_top` overloads) is LEFT +
+documented: it is dormant under the believed-correct engine (v2 over-books load
+via `_rider_inflow`, so validate never sees an overload it passed → repair
+never fires), and §8 is already protective on the postprocess path
+(`apply_postprocess` reverts on any validate error).
 
 ---
 

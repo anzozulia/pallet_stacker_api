@@ -78,9 +78,12 @@ creates a job and returns immediately — it does **not** solve inline.
     "max_overhang": 0          // optional non-negative INTEGER, <= min(length, width).
                                //   With overhang > 0 the whole-pallet weighted
                                //   CoG is constrained to the deck footprint
-                               //   [0,L]x[0,W] (round 7, ADR D20): a load that
-                               //   could only pack by putting its balance past
-                               //   the deck edge (it would tip) is packed
+                               //   [0,L]x[0,W] (round 7, ADR D20), AND each
+                               //   rigid sub-assembly's CoG must project over
+                               //   its own deck contact (round 8, ADR D21): a
+                               //   load that could only pack by putting its
+                               //   balance — or a detached stack's balance —
+                               //   past the deck edge (it would tip) is packed
                                //   balanced or returned unpacked.
   },
   "options": {

@@ -150,11 +150,23 @@ def test_validate_explicit_cog_range_enforced():
                  max_weight=float("inf"), cog_x_range=(500.0, 700.0))
     cfg = PackerConfig()
     box = Box(id="A", length=300, width=300, height=300, weight=50.0)
-    off = _state(cfg, [(box, Rotation.LWH, 0.0, 0.0, 0.0)], pallet=pal)
+    box2 = Box(id="B", length=300, width=300, height=300, weight=50.0)
+    # Two boxes low on the deck -> combined CoG x=150 outside (500,700). With
+    # >= 2 placements the engine's running-CoG reject WOULD have checked it, so
+    # validate enforces it too.
+    off = _state(cfg, [(box, Rotation.LWH, 0.0, 0.0, 0.0),
+                       (box2, Rotation.LWH, 0.0, 400.0, 0.0)], pallet=pal)
     errs = validate(off, pal, cfg)
     assert any("CoG" in e for e in errs), errs
-    centred = _state(cfg, [(box, Rotation.LWH, 450.0, 250.0, 0.0)], pallet=pal)
+    centred = _state(cfg, [(box, Rotation.LWH, 450.0, 0.0, 0.0),
+                           (box2, Rotation.LWH, 450.0, 300.0, 0.0)], pallet=pal)
     assert not validate(centred, pal, cfg)
+    # F37 (round 8): a SINGLE off-range box is NOT flagged — the engines never
+    # CoG-check the first box (v2 _cog_ok `not self.placements`; the JIT
+    # new-bin path seeds it with no envelope check), so validate must not
+    # reject an engine-legal lone corner box.
+    single = _state(cfg, [(box, Rotation.LWH, 0.0, 0.0, 0.0)], pallet=pal)
+    assert not validate(single, pal, cfg)
     # No explicit range -> the fraction default is NOT enforced (geometric
     # path never enforces it, so the validator must not either).
     assert not validate(
