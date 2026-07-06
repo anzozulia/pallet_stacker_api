@@ -335,6 +335,100 @@ bit-identical solution quality in fixed-budget A/B) — the designed fix
 rider scan only runs when the candidate's top matches an existing plane)
 stays in the backlog until profiling ever shows decode-bound solves.
 
+### D18 — Floor toppling rule: centroid-over-deck under overhang — **ACCEPTED (implemented)**
+
+**Context (hardening round 6, F30).** Round 2's F17 gave overhanging floor
+boxes the deck-contact RATIO rule but not its toppling half: a floor box
+whose contact ratio passes a `support_ratio < 0.5` can still have its
+footprint centroid PAST the deck edge — more than half its mass
+cantilevered off the pallet, physically tipping on placement — and the
+stacked-box centroid rule explicitly exempts floor boxes. The round-6
+evaluation shipped exactly that through the live API (centroid at x=410 on
+a 400-deep deck, `status: done`, no warnings); 105/120 engine solves at
+`sr < 0.5` + overhang produced at least one validate-clean toppling floor
+box (contact ratios down to 0.08).
+
+**Decision.** Complete F17: a floor placement under overhang must ALSO keep
+its footprint centroid inside the deck-contact rectangle, gated on
+`require_centroid_supported` — the same flag that owns the stacked
+centroid semantics (the service always sets it). Implemented in all four
+surfaces: v2 `feasible`, both JIT twins (inside the one shared
+`_check_load_on_top` floor branch every decoder path already calls — an
+integer-doubled `2x+dx > 2*x_hi` compare, exact), and `validate()`.
+A centroid EXACTLY on the deck edge is accepted (mirrors the stacked
+rule's boundary behavior); per-box (not rigid-block) toppling is the
+deliberate semantic, consistent with the per-box load model.
+
+**Inertness boundary (worked, load-bearing for the gates).** Categorically
+inert when overhang is off (the twins' `pallet_l <= 0` sentinel returns
+before the check; v2/validate floor branches are overhang-gated). Provably
+inert for `sr ≥ 0.5 + 1e-6`: area ratio ≤ min per-axis ratio, so ratio ≥
+0.5 forces the centroid over the deck on both axes. At `sr = 0.5` exactly
+it is still exact on integer grids for dims ≤ 5·10⁵ (the CoM overshoot is
+quantized at half a grid unit); only float-dim v2 layouts at exactly
+sr = 0.5 under overhang sit on a knife edge (physically AT the tipping
+point) and are not bit-identity-promised. All goldens (no overhang), BR
+(geometric path), and the realism battery (ratio ≥ 0.92) are provably
+unaffected. With `require_centroid_supported=False` neither the engines
+nor the validator check floor CoM — the caller disabled centroid
+semantics; same documented carve-out class as `support_ratio=0` floating.
+
+**Verification.** The standing physics gate grew a FLOOR_TOPPLE oracle
+criterion (gated on the config's centroid flag — an rc=0 decode may
+legally topple) plus a third scenario family in the toppling regime:
+pre-fix it fails with 2,402 violations across 18,864 decodes (sweep C:
+2,277/4,320; the sr=0.8 production sweep stays at 0 — confirming the
+boundary), post-fix 0. The backend-equivalence campaign grew a
+deterministic round-6 battery (mode 2 — the scoring that actually picks
+partially-overhanging floor spots) with a `floor_com_rejections_seen`
+coverage counter gating PASS, including the boundary pair (centroid ON
+the edge accepts; one half-grid past rejects) and an rc=0 gate case.
+
+### D19 — Multi-pallet objective: unpacked volume ≫ pallet count ≫ realism — **ACCEPTED (implemented)**
+
+**Context (hardening round 6, F31).** The BRKGA fitness — base AND realism,
+scalar AND batch — measured only `pallets[0]`. For `max_pallets > 1`
+without groups the search was provably blind past the first pallet:
+packing 10 boxes on pallet 1 scored IDENTICALLY (0.975) to dropping all
+10. Pallets 2..N were whatever the greedy multi-bin decode produced from
+an ordering optimized for pallet 0 alone, and the restart/v2-hybrid
+comparisons amplified the same mask. Undocumented; never invalid — pure
+lost quality on a documented feature (`max_pallets` 1..100).
+
+**Decision.** Gate on `max_pallets != 1` (the `!= 1` deliberately includes
+the library `max_pallets <= 0` "auto/32-bins" mode). At `max_pallets == 1`
+the EXACT historical formula executes byte-for-byte — goldens, BR, group
+solves (per-pallet `max_pallets=1`), and external verify scripts are
+pinned by construction. Otherwise:
+
+    fitness = v_unpacked/cap + β·n_pallets_used [+ (0.5·eps)·R_all_pallets]
+    β = 0.5 · min_box_volume / cap
+
+Strict dominance hierarchy: packing any box — even on a NEW pallet —
+improves fitness by ≥ 0.5·β (any volume ≥ min_vol = 2β·cap, |realism| <
+0.5·β), so boxes are never sacrificed to save pallets; fewer pallets win
+at equal packed volume; realism is a pure tiebreak over ALL pallets. The
+eps HALVING is required, not stylistic: at `realism_weight=1` the
+unhalved ctx.eps equals β exactly and a full realism swing could flip a
+pallet-count decision. Halved at APPLY time only — `ctx.eps` itself is
+shared by `packer._realism_key` and external scripts and keeps its
+single-pallet semantics. Degenerate dust instances where 0.5·β ≤ 1e-9
+(min_vol/cap ≤ 4e-9) lose the count/realism gradations inside the
+acceptance band — the same class the realism layer already disables for.
+
+**Measured effect.** 16-solve A/B (8 heterogeneous no-group instances ×
+realism on/off, `max_pallets=3`, 6 s budget): **+173 boxes packed, zero
+instances worse, identical pallet counts, all plans valid** — four
+instances went from double-digit drops to zero unpacked. Scalar/batch
+parity holds at |Δ| < 1e-12 on multi-bin populations (the decoders never
+emit empty bins, so the scalar's non-empty-pallet count equals the batch
+path's `n_bins_out_all`).
+
+**Repair remains O(P³) by design** (round-6 note): it is the last-resort
+backstop that only runs on validation failure, outside the solver budget,
+bounded in practice by the ~30 s hard-kill margin — not worth complexity
+until it is ever observed hot.
+
 ---
 
 ## Decisions still open

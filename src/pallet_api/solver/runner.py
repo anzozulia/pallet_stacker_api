@@ -26,7 +26,7 @@ def _target(payload: Dict[str, Any], cfg: Dict[str, Any], q) -> None:
 
 def run_with_hard_timeout(payload: Dict[str, Any], cfg: Dict[str, Any],
                           hard_timeout_s: float,
-                          _target_fn=None) -> Dict[str, Any]:
+                          _target_fn=None, _ctx=None) -> Dict[str, Any]:
     """Run solve in a subprocess; kill it past hard_timeout_s. Returns a status
     dict: {status: done|timeout|failed, result?|error?}.
 
@@ -35,10 +35,20 @@ def run_with_hard_timeout(payload: Dict[str, Any], cfg: Dict[str, Any],
     enqueueing anything (segfault / OOM-kill in native code) pinned this
     worker for the full hard budget (~120 s) before `solver_crashed` was
     reported, ~100x the actual work per attempt.
+
+    Round 6 (F32): one final non-blocking drain after the deadline loop
+    breaks — a result enqueued in the sub-ms window AT the deadline used to
+    be discarded as `timeout`, or (child put-then-exited) a SUCCESSFUL
+    solve was mislabeled `solver_crashed`.
+
+    _target_fn/_ctx are test seams (round-5/round-6 precedent): _ctx
+    substitutes the multiprocessing context so a stub Queue/Process can
+    exercise the deadline-boundary branches deterministically.
     """
-    q = _CTX.Queue()
-    p = _CTX.Process(target=_target_fn or _target,
-                     args=(payload, cfg, q), daemon=True)
+    ctx = _ctx or _CTX
+    q = ctx.Queue()
+    p = ctx.Process(target=_target_fn or _target,
+                    args=(payload, cfg, q), daemon=True)
     p.start()
     deadline = _time.monotonic() + hard_timeout_s
     got = False
@@ -65,6 +75,16 @@ def run_with_hard_timeout(payload: Dict[str, Any], cfg: Dict[str, Any],
                             "code": "solver_crashed",
                             "message": "solver process exited without "
                                        "a result"}}
+        if not got:
+            # Round 6 (F32): drain once before deciding — a result put in
+            # the last slice right at the deadline is real work; without
+            # this it was reported `timeout` (or `solver_crashed` when the
+            # child put-then-exited in the window).
+            try:
+                kind, val = q.get_nowait()
+                got = True
+            except _queue.Empty:
+                pass
         if not got:
             if p.is_alive():
                 p.terminate()

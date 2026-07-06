@@ -39,3 +39,91 @@ def test_non_gate_exception_maps_to_solver_error(fast_cfg):
                                 fast_cfg, hard_timeout_s=60)
     assert out["status"] == "failed"
     assert out["error"]["code"] == "solver_error"
+
+
+# ------------------------------------------------- round 6 (F32): the
+# deadline-boundary drain. A result enqueued in the sub-ms window AT the
+# hard deadline used to be dropped (`timeout`) — or, if the child had
+# put-then-exited, a SUCCESSFUL solve was mislabeled `solver_crashed`.
+# The race window is sub-millisecond, so these use the `_ctx` seam with a
+# scripted Queue/Process instead of racing a real subprocess.
+import queue as _q  # noqa: E402
+
+
+class _StubQueue:
+    """get() always times out (the loop never sees the result); the
+    post-deadline get_nowait() finds it — the exact F32 window."""
+    def __init__(self, item):
+        self._item = item
+
+    def get(self, timeout=None):
+        raise _q.Empty
+
+    def get_nowait(self):
+        if self._item is None:
+            raise _q.Empty
+        item, self._item = self._item, None
+        return item
+
+
+class _StubProcess:
+    def __init__(self, alive_during_loop=True):
+        self._alive = alive_during_loop
+        self.killed = False
+
+    def start(self):
+        pass
+
+    def is_alive(self):
+        return self._alive
+
+    def terminate(self):
+        self._alive = False
+
+    def kill(self):
+        self.killed = True
+        self._alive = False
+
+    def join(self, timeout=None):
+        self._alive = False
+
+
+class _StubCtx:
+    def __init__(self, item, alive):
+        self._item = item
+        self._alive = alive
+
+    def Queue(self):
+        return _StubQueue(self._item)
+
+    def Process(self, target=None, args=(), daemon=None):
+        return _StubProcess(self._alive)
+
+
+def test_result_at_deadline_is_drained_not_timeout():
+    # Child alive at the deadline with its result already queued: was
+    # `timeout` (result discarded), must be `done`.
+    ctx = _StubCtx(item=("done", {"ok": 1}), alive=True)
+    out = run_with_hard_timeout({}, {}, hard_timeout_s=0.3, _ctx=ctx)
+    assert out == {"status": "done", "result": {"ok": 1}}
+
+
+def test_put_then_exit_at_deadline_is_done_not_crashed():
+    # Child enqueued its result and exited inside the final slice: was
+    # mislabeled `solver_crashed`, must be `done`.
+    ctx = _StubCtx(item=("done", {"ok": 2}), alive=False)
+    out = run_with_hard_timeout({}, {}, hard_timeout_s=0.3, _ctx=ctx)
+    assert out == {"status": "done", "result": {"ok": 2}}
+
+
+def test_empty_queue_envelopes_unchanged():
+    # Genuinely empty queue: the timeout / crashed envelopes must be
+    # exactly as before the drain was added.
+    out = run_with_hard_timeout({}, {}, hard_timeout_s=0.3,
+                                _ctx=_StubCtx(item=None, alive=True))
+    assert out["status"] == "timeout"
+    assert out["error"]["code"] == "solve_timeout"
+    out = run_with_hard_timeout({}, {}, hard_timeout_s=0.3,
+                                _ctx=_StubCtx(item=None, alive=False))
+    assert out["status"] == "failed"
+    assert out["error"]["code"] == "solver_crashed"

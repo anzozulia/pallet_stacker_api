@@ -80,6 +80,11 @@ curl -s localhost:8000/api/v1/jobs/<job_id>
   in the rare case it hasn't, the service repairs the plan (offenders move to
   `unpacked_items` with `reason: "load_limit_repair"`) and reports it in a
   `result.warnings` array. `warnings` present = engine bug worth reporting.
+  Round 6 (ADRs D18/D19) added the floor **toppling** rule (a box that could
+  only sit tipping past the deck edge under overhang is dropped, not shipped
+  as "valid") and a real **multi-pallet objective** (max_pallets > 1 now
+  optimises unpacked volume ≫ pallet count ≫ layout, instead of only the
+  first pallet).
 - Errors share one envelope: `{"error": {"code", "message"?, "problems"?}}`.
   Schema violations → `422` — **including unknown/typo'd fields** (a
   misspelled option is rejected, never silently defaulted); contract

@@ -149,7 +149,11 @@ class PlacementOut(BaseModel):
     orientation: Optional[Orientation] = Field(None, description="The chosen rotation.")
     weight: Optional[float] = Field(None, description="The box's weight (from the request).")
     support_ratio: Optional[float] = Field(None, description="Fraction of this box's "
-                                           "base supported from below [0,1]; 1.0 = full.")
+                                           "base supported from below; typically [0,1], 1.0 = "
+                                           "full. May exceed 1.0 only on plans served WITH "
+                                           "`warnings` (degraded geometry can double-count "
+                                           "overlapping supporters — reported honestly, not "
+                                           "clamped).")
     supported_by: Optional[List[str]] = Field(None, description="Ids of items directly "
                                               "beneath this box, or `floor`.",
                                               examples=[["floor"]])

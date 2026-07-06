@@ -57,7 +57,25 @@ builds the core (Cython extensions) into the image with no external dependency.
   warnings), made `to_json` honest about floaters and overhang deck
   contact, and added load-bearing guard comments — see upstream
   `docs/reports/38`. Equivalence + physics gates PASS, BR smoke and all
-  goldens bit-identical. Kept in sync with upstream.
+  goldens bit-identical.
+  Plus round 6 (upstream `5ad25ff`, 2026-07-06) — the third decoder-twin
+  change: the floor TOPPLING rule (F30) completes round-2's F17 — a floor
+  box under overhang must keep its footprint centroid over the deck-contact
+  rectangle (a `support_ratio < 0.5` box could otherwise ship tipping past
+  the deck edge), added to v2 `feasible`, both JIT twins (the shared
+  `_check_load_on_top` floor branch), and `validate()`, gated on
+  `require_centroid` and provably inert with overhang off or
+  `support_ratio >= 0.5` (goldens/BR/battery unaffected). Plus the
+  multi-pallet OBJECTIVE (F31, pure-Python, no twin): the BRKGA fitness
+  was pallet-0-only, so `max_pallets > 1` without groups packed pallets
+  2..N with no search signal — now unpacked-volume ≫ pallet-count ≫
+  realism over all pallets, byte-identical at `max_pallets == 1`. See ADRs
+  D18/D19 and upstream `docs/reports/39`. Verified by the extended
+  equivalence campaign (2670 comparisons, 0 mismatches, new
+  `floor_com_rejections_seen` counter gates PASS) and the standing physics
+  gate's new FLOOR_TOPPLE oracle + toppling-regime sweep (2,402 violations
+  pre-fix → 0/18,864 post-fix); BR smoke + all three goldens bit-identical.
+  Kept in sync with upstream.
 - **Contents:** source only — the `pallet_packer/` package (`.py` + Cython
   `.pyx`/`.pxd`) plus its build files (`setup.py`, `pyproject.toml`). No built
   artifacts (`.so`/`.c`/`.html`/numba caches) are committed; the Docker build

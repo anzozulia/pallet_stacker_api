@@ -137,3 +137,120 @@ def test_exact_fit_tiling_packs_all_via_service(fast_cfg):
     }
     res = adapter.solve(payload, fast_cfg)
     assert res["input_summary"]["items_packed"] == 8
+
+
+# ---------------------------------------------------------------- round 6
+# F30: a floor box under overhang whose footprint centroid projects past
+# the deck edge tips over. Round-2 F17 added the deck-contact RATIO rule
+# but not this toppling half; at support_ratio < 0.5 the ratio no longer
+# implies centroid-on-deck. See ADR D18.
+
+def _f30_state(sr=0.25, rc=True):
+    from pallet_packer.packer import PalletState
+    pallet = Pallet(length=400, width=400, height=1000, max_overhang=400)
+    cfg = PackerConfig(allow_pallet_overhang=True, support_ratio=sr,
+                       require_centroid_supported=rc,
+                       enforce_load_bearing=True)
+    return PalletState(pallet, "P001", cfg), pallet, cfg
+
+
+def _f30_floor_box(x, dx=400):
+    from pallet_packer.models import Placement, Rotation
+    b = Box(id="T", length=dx, width=400, height=200, weight=10.0)
+    return Placement(box=b, rotation=Rotation.LWH, x=float(x), y=0.0, z=0.0)
+
+
+def test_f30_validator_flags_toppling_floor_centroid():
+    # ratio 0.25 passes sr=0.25 but centroid x=500 > deck edge 400.
+    st, pallet, cfg = _f30_state()
+    st.placements.append(_f30_floor_box(300))
+    errs = validate(PackResult(pallets=[st], unpacked=[]), pallet, cfg)
+    assert any("topple" in e for e in errs), errs
+
+
+def test_f30_boundary_centroid_on_edge_is_clean():
+    # centroid exactly ON the deck edge (x=200, dx=400 -> 400 == edge):
+    # accepted, mirroring the stacked centroid rule's boundary behavior.
+    st, pallet, cfg = _f30_state()
+    st.placements.append(_f30_floor_box(200))
+    assert validate(PackResult(pallets=[st], unpacked=[]), pallet, cfg) == []
+
+
+def test_f30_gating_require_centroid_off_and_overhang_off():
+    # rc=False: caller disabled centroid semantics -> no CoM check.
+    st, pallet, cfg = _f30_state(rc=False)
+    st.placements.append(_f30_floor_box(300))
+    assert validate(PackResult(pallets=[st], unpacked=[]), pallet, cfg) == []
+    # overhang off: branch unreachable regardless (box fully on deck).
+    pallet2 = Pallet(length=400, width=400, height=1000)
+    cfg2 = PackerConfig(support_ratio=0.25, require_centroid_supported=True)
+    from pallet_packer.packer import PalletState
+    st2 = PalletState(pallet2, "P001", cfg2)
+    st2.placements.append(_f30_floor_box(0))
+    assert validate(PackResult(pallets=[st2], unpacked=[]), pallet2, cfg2) == []
+
+
+def test_f30_v2_feasible_rejects_toppling_floor_box():
+    st, pallet, cfg = _f30_state()
+    assert st.feasible(_f30_floor_box(300)) is False      # topples
+    assert st.feasible(_f30_floor_box(200)) is True       # boundary
+    assert st.feasible(_f30_floor_box(0)) is True         # on deck
+    st_rc0, _, _ = _f30_state(rc=False)
+    assert st_rc0.feasible(_f30_floor_box(300)) is True   # gate respected
+
+
+def test_f30_engine_never_ships_toppling_floor_box():
+    # The confirmed round-6 live repro: two none-rotation fragile slabs on
+    # a 400x400 deck with full overhang at sr=0.4 — pre-fix the engine
+    # shipped B with its centroid at x=410 (validate-clean). Post-fix no
+    # shipped floor box may have its centroid past the deck contact.
+    from pallet_packer import NO_ROTATION
+    boxes = [
+        Box(id="A", length=260, width=400, height=120, weight=5.0,
+            max_load_on_top=0.0, allowed_rotations=list(NO_ROTATION)),
+        Box(id="B", length=300, width=400, height=120, weight=5.0,
+            max_load_on_top=0.0, allowed_rotations=list(NO_ROTATION)),
+    ]
+    pallet = Pallet(length=400, width=400, height=1500, max_overhang=400)
+    cfg = PackerConfig(support_ratio=0.4, require_centroid_supported=True,
+                       enforce_load_bearing=True, allow_pallet_overhang=True,
+                       transitive_load_bearing=True,
+                       recenter_layout=True, align_orientations=True,
+                       realism_weight=1.0)
+    res = brkga_pack_v35(boxes, pallet, cfg, time_limit_s=3.0,
+                         population_size=25, n_populations=1, patience=6,
+                         seed=1, max_pallets=1, use_v2_seed=True)
+    assert not validate(res, pallet, cfg)
+    for st in res.pallets:
+        for p in st.placements:
+            if p.z <= 1e-6:
+                assert p.x + p.dx / 2.0 <= min(p.x2, 400.0) + 1e-6, \
+                    f"{p.box.id} centroid past deck edge"
+                assert p.y + p.dy / 2.0 <= min(p.y2, 400.0) + 1e-6
+
+
+def test_f30_postprocess_does_not_revert_valid_low_sr_plan():
+    # A legal overhang layout at low sr must pass the post-pass replay
+    # validation (which now includes the CoM rule) without a revert.
+    from pallet_packer.postprocess import apply_postprocess
+    st, pallet, cfg = _f30_state()
+    p = _f30_floor_box(150)        # centroid 350 <= 400: legal overhang
+    st.placements.append(p)
+    st.total_weight += p.box.weight
+    res = apply_postprocess(PackResult(pallets=[st], unpacked=[]),
+                            pallet, cfg)
+    assert validate(res, pallet, cfg) == []
+    assert len(res.pallets[0].placements) == 1
+
+
+def test_f30_repair_is_noop_and_adapter_warns():
+    # A CoM-only violation is geometry, not load — repair must return the
+    # plan unchanged and the adapter surfaces it as `unrepaired:`.
+    from pallet_packer.repair import repair_load_violations
+    st, pallet, cfg = _f30_state()
+    st.placements.append(_f30_floor_box(300))
+    st.total_weight += 10.0
+    res = PackResult(pallets=[st], unpacked=[])
+    res2, actions = repair_load_violations(res, pallet, cfg)
+    assert actions == []
+    assert len(res2.pallets[0].placements) == 1

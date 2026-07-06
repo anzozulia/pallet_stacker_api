@@ -78,9 +78,18 @@ creates a job and returns immediately — it does **not** solve inline.
     "max_overhang": 0          // optional non-negative INTEGER, <= min(length, width)
   },
   "options": {
-    "max_pallets": 10,         // optional int 1..100 (default 1 = single-container)
+    "max_pallets": 10,         // optional int 1..100 (default 1 = single-container).
+                               //   Multi-pallet solves optimise unpacked volume
+                               //   first, then pallet count, then layout realism
+                               //   (round 6, ADR D19).
     "time_budget_s": 90,       // optional; clamped to [min, service_max]
-    "support_ratio": 0.8,      // optional [0,1] (default 0.8 = stability enforced)
+    "support_ratio": 0.8,      // optional [0,1] (default 0.8 = stability enforced).
+                               //   Below 0.5 with max_overhang > 0, floor
+                               //   placements are additionally held to the
+                               //   toppling rule (centroid over the deck
+                               //   contact, round 6 / ADR D18) — a box that
+                               //   could only sit tipping past the deck edge
+                               //   is returned unpacked instead.
     "seed": 42                 // optional int >= 0 (omit -> service default, reproducible)
   }
 }
@@ -189,7 +198,10 @@ Poll a job. Status progression: `queued` → `running` → terminal
             "dimensions": { "L": 300, "W": 200, "H": 150 },
             "orientation": { "perm": [0,1,2], "name": "LWH" },
             "weight": 2.5,
-            "support_ratio": 1.0,
+            "support_ratio": 1.0,   // typically [0,1]; may exceed 1.0 ONLY on
+                                    //   plans served with `warnings` (degraded
+                                    //   geometry double-counts overlapping
+                                    //   supporters — honest, not clamped)
             "supported_by": ["floor"],
             "supports": ["B0007"]
           }
