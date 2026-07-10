@@ -108,20 +108,33 @@ def test_health_and_version_never_limited(client, flush_redis, monkeypatch):
         assert client.get("/api/v1/version").status_code == 200
 
 
-def test_cors_absent_by_default_and_present_when_configured(redis_ready,
-                                                            monkeypatch):
+def test_cors_default_open_lockable_and_optoutable(redis_ready, monkeypatch):
+    # Post-merge semantics (the front-end commit + round 5 reconciled):
+    # default = "*" (the browser front-end must reach the API out of the box);
+    # an explicit origin list locks it down; an explicitly EMPTY env
+    # (cors_origins == []) is the round-5 opt-out — middleware not installed.
     from pallet_api.config import settings
     from pallet_api.api.app import create_app
-    with TestClient(create_app()) as c:
-        r = c.options("/api/v1/pack",
-                      headers={"Origin": "https://app.example.com",
-                               "Access-Control-Request-Method": "POST"})
-        assert "access-control-allow-origin" not in r.headers
-    monkeypatch.setattr(settings, "cors_origins", "https://app.example.com")
-    with TestClient(create_app()) as c:
-        r = c.options("/api/v1/pack",
-                      headers={"Origin": "https://app.example.com",
-                               "Access-Control-Request-Method": "POST"})
+    pre = {"Origin": "https://app.example.com",
+           "Access-Control-Request-Method": "POST"}
+    with TestClient(create_app()) as c:          # default ["*"]
+        r = c.options("/api/v1/pack", headers=pre)
+        assert r.status_code == 200
+        assert r.headers.get("access-control-allow-origin") in (
+            "https://app.example.com", "*")
+    monkeypatch.setattr(settings, "cors_origins", ["https://app.example.com"])
+    with TestClient(create_app()) as c:          # locked to one origin
+        r = c.options("/api/v1/pack", headers=pre)
         assert r.status_code == 200
         assert (r.headers.get("access-control-allow-origin")
                 == "https://app.example.com")
+        denied = c.options("/api/v1/pack",
+                           headers={"Origin": "https://evil.example.com",
+                                    "Access-Control-Request-Method": "POST"})
+        assert ("access-control-allow-origin" not in denied.headers
+                or denied.headers["access-control-allow-origin"]
+                != "https://evil.example.com")
+    monkeypatch.setattr(settings, "cors_origins", [])
+    with TestClient(create_app()) as c:          # explicit opt-out
+        r = c.options("/api/v1/pack", headers=pre)
+        assert "access-control-allow-origin" not in r.headers

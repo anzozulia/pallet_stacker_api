@@ -28,6 +28,10 @@ services:
       PALLET_API_HARD_BUDGET_S: "120"
       PALLET_API_MAX_BOXES: "500"
       PALLET_API_CORE_VERSION: "3.13.0+fd2ea2c"   # vendored core (see core/VENDOR.md)
+      # Origins allowed to call this API from a browser (the static front-end does).
+      # "*" = any origin (safe: no-login API, no cookies). Lock down to your front-end
+      # origin in production, e.g. "https://app.example.com".
+      PALLET_API_CORS_ORIGINS: ${PALLET_API_CORS_ORIGINS:-*}
     ports: ["8000:8000"]
     depends_on: [redis]
     networks:

@@ -14,6 +14,7 @@ from arq import create_pool
 from arq.connections import RedisSettings
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -130,19 +131,26 @@ def create_app() -> FastAPI:
     app.add_exception_handler(StarletteHTTPException, _http_exc_handler)
     app.add_exception_handler(RequestValidationError, _validation_exc_handler)
     # Middleware order (add_middleware is LIFO — last added runs first):
-    # rate limiter OUTERMOST so a 429 is decided before any body byte is
-    # received (round 5, R4); then the body cap; then the app.
+    # CORS OUTERMOST so the browser preflight (OPTIONS) is answered before
+    # the rate limiter sees it and so 429/413 responses still carry the
+    # Access-Control-* headers the front-end needs to READ the error; then
+    # the rate limiter, deciding a 429 before any body byte is received
+    # (round 5, R4 — CORS never reads the body, so that property holds);
+    # then the body cap; then the app.
     app.add_middleware(BodySizeLimitMiddleware)
     app.add_middleware(RateLimitMiddleware)
-    if settings.cors_origins.strip():
-        # Round 5 (R4): env-gated CORS for browser front-ends. Absent env
-        # (the default) = middleware not installed at all.
-        from fastapi.middleware.cors import CORSMiddleware
+    if settings.cors_origins:
+        # Empty PALLET_API_CORS_ORIGINS= (explicit opt-out) = middleware not
+        # installed at all — the round-5 server-to-server posture. The default
+        # is ["*"]: the static front-end calls this API directly from the
+        # browser, and a cross-origin POST /pack would otherwise be blocked
+        # (the UI then shows "Couldn't reach the packing service"). No
+        # cookies/credentials are used, so "*" is safe; lock down via env.
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=[o.strip() for o in settings.cors_origins.split(",")
-                           if o.strip()],
-            allow_methods=["GET", "POST"],
+            allow_origins=settings.cors_origins,
+            allow_credentials=False,
+            allow_methods=["GET", "POST", "OPTIONS"],
             allow_headers=["*"],
             max_age=3600,
         )

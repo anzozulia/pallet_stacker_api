@@ -118,7 +118,7 @@ All operational knobs are environment variables (12-factor); defaults shown. Cop
 | `PALLET_API_HARD_BUDGET_S` | `120` | Worker hard wall-clock kill (→ `timeout`) |
 | `PALLET_API_RATE_LIMIT_PER_MIN` | `30` | Per-IP `POST /pack` per 60-second window (checked BEFORE the body is read) |
 | `PALLET_API_POLL_RATE_LIMIT_PER_MIN` | `600` | Per-IP `GET /jobs/*` polls per minute |
-| `PALLET_API_CORS_ORIGINS` | *(empty)* | Comma-separated browser origins; empty = no CORS middleware |
+| `PALLET_API_CORS_ORIGINS` | `*` | Browser origins allowed to call the API (comma-separated; `*` = any — safe: no-login, no cookies). Required for the static front-end; set explicit origins to lock down, empty to disable CORS |
 | `PALLET_API_RESULT_TTL_S` | `3600` | How long a result is fetchable (then `404`) |
 | `PALLET_API_DEFAULT_MAX_PALLETS` | `1` | Default `max_pallets` |
 | `PALLET_API_DEFAULT_SEED` | `42` | Default RNG seed (determinism) |
@@ -172,9 +172,11 @@ stable alias **`pallet-packer-api`**; redis and the workers stay on the private
 
 > This is for **server-to-server** calls (SSR / a BFF / a proxy inside your
 > front-end container). A user's browser is not on the Docker network — for
-> direct browser calls, route them through your front-end's reverse proxy or the
-> public host port, and note the API ships **no CORS headers** (add a proxy or
-> CORS middleware if a browser must call it cross-origin).
+> direct browser calls, point the front-end at the API's public host/origin.
+> The API **sends CORS headers** for cross-origin browser calls: by default it
+> allows **any** origin (safe here — it is no-login and uses no cookies). Lock it
+> down to your front-end origin(s) with `PALLET_API_CORS_ORIGINS`
+> (comma-separated), e.g. `PALLET_API_CORS_ORIGINS=https://app.example.com`.
 >
 > Bring the API stack down *after* the front-end (or `docker compose down`
 > harmlessly warns that `pallet-packer-net` still has active endpoints).

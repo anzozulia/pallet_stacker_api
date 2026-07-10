@@ -28,6 +28,13 @@ def _b(name: str, default: bool) -> bool:
     return v.strip().lower() not in ("0", "false", "no", "off")
 
 
+def _list(name: str, default: str) -> list[str]:
+    """Parse a comma-separated env var into a stripped, non-empty list.
+    Unlike _b, an explicitly EMPTY value means "empty list", not "default" —
+    cors_origins uses that as the deliberate opt-out (no origins = CORS off)."""
+    return [item.strip() for item in os.getenv(name, default).split(",") if item.strip()]
+
+
 class Settings:
     # --- Redis / queue ---
     redis_url: str = os.getenv("PALLET_API_REDIS_URL", "redis://localhost:6379")
@@ -75,12 +82,17 @@ class Settings:
     poll_rate_limit_per_min: int = _i("PALLET_API_POLL_RATE_LIMIT_PER_MIN",
                                       600)
 
-    # --- CORS (round 5, R4) ---
-    # Comma-separated list of allowed browser origins. Empty (default) =
-    # CORS middleware not installed at all — server-to-server callers and
-    # same-origin proxies need nothing; a browser front-end sets e.g.
-    # PALLET_API_CORS_ORIGINS=https://app.example.com
-    cors_origins: str = os.getenv("PALLET_API_CORS_ORIGINS", "")
+    # --- CORS (browser cross-origin access) ---
+    # The static front-end calls this API DIRECTLY from the browser, so the API must
+    # send Access-Control-Allow-Origin for the front-end's serving origin — otherwise the
+    # browser blocks every request and the UI shows "Couldn't reach the packing service".
+    # Comma-separated list of allowed origins; "*" (the default) allows ANY origin, which
+    # is safe here because this is a no-login API that uses no cookies/credentials. Lock it
+    # down to your front-end origin(s) in production if you prefer, e.g.
+    #   PALLET_API_CORS_ORIGINS=https://app.example.com,https://www.example.com
+    # Explicitly EMPTY (PALLET_API_CORS_ORIGINS=) = no origins = the CORS
+    # middleware is not installed at all (the round-5 server-to-server posture).
+    cors_origins: list[str] = _list("PALLET_API_CORS_ORIGINS", "*")
 
     # --- meta ---
     version: str = os.getenv("PALLET_API_VERSION", "0.1.0")
